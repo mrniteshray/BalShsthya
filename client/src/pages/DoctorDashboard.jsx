@@ -848,14 +848,19 @@ const DoctorDashboard = () => {
                             <span className="text-white font-bold tracking-widest text-sm">LIVE</span>
                         </div>
 
-                        <div className="flex-1 relative">
+                        <div className="flex-1 relative flex items-center justify-center bg-slate-950 overflow-hidden">
                             {callAccepted && !callEnded ? (
-                                <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
+                                <div className="w-full h-full max-w-5xl max-h-[80%] border-2 border-white/5 rounded-[2rem] overflow-hidden shadow-2xl relative">
+                                    <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
+                                    <div className="absolute top-6 right-6 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+                                        <span className="text-[10px] text-white font-bold tracking-widest uppercase">Patient Feed</span>
+                                    </div>
+                                </div>
                             ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center text-slate-100 bg-purple-50/50 dark:bg-slate-950">
+                                <div className="w-full h-full flex flex-col items-center justify-center text-slate-100 bg-slate-950">
                                     <div className="w-20 h-20 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mb-6" />
                                     <p className="font-bold text-lg text-white mb-2">Waiting for Patient...</p>
-                                    <p className="text-white font-medium">They will join your room shortly.</p>
+                                    <p className="text-white font-medium opacity-60">They will join your room shortly.</p>
 
                                     {receivingCall && !callAccepted && (
                                         <div className="mt-8 bg-slate-800/40 backdrop-blur-md/80 backdrop-blur border border-purple-500 p-6 rounded-3xl flex items-center gap-6 animate-bounce">
@@ -885,7 +890,7 @@ const DoctorDashboard = () => {
 
                             {/* DOCTOR PIP (Self View) */}
                             {stream && (
-                                <div className="absolute bottom-6 right-6 w-56 aspect-[4/3] rounded-2xl border-2 border-purple-500/50 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-black z-[60] group/pip">
+                                <div className="absolute bottom-10 right-10 w-56 aspect-[4/3] rounded-2xl border-2 border-purple-500/50 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-black z-[60] group/pip">
                                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-purple-600/80 backdrop-blur-md rounded-md text-[10px] font-black text-white z-10 border border-white/20">YOU</div>
                                     <video ref={myVideo} autoPlay playsInline muted className={`w-full h-full object-cover transition-transform duration-700 ${!isCameraOff ? "scale-x-[-1]" : ""}`} />
                                     {isCameraOff && (
@@ -898,7 +903,7 @@ const DoctorDashboard = () => {
                         </div>
 
                         {/* VIDEO CONTROLS */}
-                        <div className="h-28 bg-slate-900/80 backdrop-blur-xl border-t border-white/10 flex items-center justify-center gap-8 relative shrink-0">
+                        <div className="h-24 bg-slate-900/90 backdrop-blur-xl border-t border-white/10 flex items-center justify-center gap-8 relative shrink-0">
                             {/* Toggle File Button */}
                             <button
                                 onClick={() => setIsNotesPanelOpen(!isNotesPanelOpen)}

@@ -73,6 +73,7 @@ const ConsultationPage = () => {
 
   const [doctors, setDoctors] = useState([]);
   const [loadingDoctors, setLoadingDoctors] = useState(true);
+  const [pastAppointments, setPastAppointments] = useState([]);
 
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
@@ -140,6 +141,10 @@ const ConsultationPage = () => {
               setShowBookingSummary(true);
             }
           }
+
+          // 3. Store completed appointments for Medical History
+          const completed = apptRes.data.filter(a => a.status === 'Completed');
+          setPastAppointments(completed);
         }
       } catch (err) {
         console.error("Failed to fetch initial data:", err);
@@ -905,8 +910,55 @@ const ConsultationPage = () => {
             )}
           </div>
         ) : (
-          <div className="h-full max-w-4xl mx-auto">
+          <div className="h-full max-w-4xl mx-auto flex flex-col gap-8">
             <BookingSummaryView />
+            
+            {/* Medical History Section - Only shown when summary is visible */}
+            {pastAppointments.length > 0 && (
+              <div className="bg-slate-900/40 backdrop-blur-md border border-white/10 p-8 rounded-[2.5rem] mt-4">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-purple-500/20 rounded-lg">
+                    <FileText className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white">Your Medical Records</h3>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {pastAppointments.map(app => (
+                    <div key={app._id} className="bg-white/5 border border-white/10 p-5 rounded-3xl hover:bg-white/10 transition group">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <p className="text-[10px] uppercase font-black text-purple-400 tracking-[0.2em] mb-1">{app.date}</p>
+                          <h4 className="text-white font-bold italic">Dr. {app.doctorName || "Nitesh Ray"}</h4>
+                        </div>
+                        <span className="bg-green-500/10 text-green-400 text-[10px] px-2 py-0.5 rounded-full border border-green-500/20 font-black">COMPLETED</span>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {app.diagnosis && (
+                          <div>
+                            <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Diagnosis</p>
+                            <p className="text-sm text-white/90 font-medium leading-tight">{app.diagnosis}</p>
+                          </div>
+                        )}
+                        {app.prescriptions && (
+                          <div>
+                            <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Prescriptions</p>
+                            <p className="text-sm text-purple-200 font-bold whitespace-pre-line leading-tight">{app.prescriptions}</p>
+                          </div>
+                        )}
+                        {app.notes && (
+                          <div className="pt-2 border-t border-white/5">
+                            <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Advice</p>
+                            <p className="text-xs text-white/60 italic leading-snug">&quot;{app.notes}&quot;</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
