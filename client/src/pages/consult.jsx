@@ -46,7 +46,8 @@ const ConsultationPage = () => {
   const [selectedDay, setSelectedDay] = useState(0); // 0: Today, 1: Tomorrow, 2: day after
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [isBooking, setIsBooking] = useState(false);
-  const [bookingStatus, setBookingStatus] = useState(null); // 'pending', 'accepted', 'rejected'
+  const [bookingStatus, setBookingStatus] = useState(null); // Keep for current booking session
+  const [activeAppointments, setActiveAppointments] = useState([]); // List for all active bookings
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [notification, setNotification] = useState(null);
 
@@ -139,6 +140,10 @@ const ConsultationPage = () => {
               setShowBookingSummary(true);
             }
           }
+
+          // Store active appointments for the horizontal list
+          const active = apptRes.data.filter(a => ['pending', 'accepted', 'Confirmed'].includes(a.status));
+          setActiveAppointments(active);
 
           // 3. Store completed appointments for Medical History
           const completed = apptRes.data.filter(a => a.status === 'Completed');
@@ -242,8 +247,8 @@ const ConsultationPage = () => {
       setNotification({
         title: data.status === 'accepted' ? 'Slot Confirmed!' : 'Slot Unavailable',
         message: data.status === 'accepted'
-          ? `Dr. ${data.doctorName} has accepted your request for ${slotVal}.`
-          : `Dr. ${data.doctorName} is unable to take the ${slotVal} slot. Please try another.`,
+          ? `Dr. {data.doctorName} has accepted your request for ${slotVal}.`
+          : `Dr. {data.doctorName} is unable to take the ${slotVal} slot. Please try another.`,
         type: data.status === 'accepted' ? 'accepted' : 'error' // Match CSS classes
       });
       // Auto-clear notification after 8 seconds
@@ -256,7 +261,7 @@ const ConsultationPage = () => {
       setIsBooking(false);
       setNotification({
         title: 'Appointment Rescheduled',
-        message: `Dr. ${data.doctorName} has rescheduled your appointment to ${data.date} at ${data.slot}.`,
+        message: `Dr. {data.doctorName} has rescheduled your appointment to ${data.date} at ${data.slot}.`,
         type: 'accepted' // Using 'accepted' styling for rescheduled
       });
       setTimeout(() => setNotification(null), 8000);
@@ -465,6 +470,10 @@ const ConsultationPage = () => {
       
       setActiveAppointmentId(res.appointmentId);
       toast.success("Consultation Request Sent!");
+      
+      // Refresh active list
+      const apptRes = await appointmentAPI.getParentAppointments();
+      setActiveAppointments(apptRes.data.filter(a => ['pending', 'accepted', 'Confirmed'].includes(a.status)));
     } catch (error) {
       console.error("Booking error:", error);
       toast.error(error.message || "Failed to book slot");
@@ -472,6 +481,17 @@ const ConsultationPage = () => {
       setSelectedSlot(null);
     } finally {
       setIsBooking(false);
+    }
+  };
+
+  const cancelAppointment = async (id) => {
+    try {
+      await appointmentAPI.deleteAppointment(id);
+      toast.success("Appointment cancelled");
+      setActiveAppointments(prev => prev.filter(a => a._id !== id));
+      socket.emit("appointment-cancelled", { appointmentId: id });
+    } catch (err) {
+      toast.error("Failed to cancel");
     }
   };
 
@@ -738,13 +758,69 @@ const ConsultationPage = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-4 md:p-8 h-full">
-        {isBooking || bookingStatus || showBookingSummary ? (
-          <div className="h-full max-w-4xl mx-auto flex flex-col gap-8">
+      <div className="flex-1 p-4 md:p-8 h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto flex flex-col gap-10">
+          
+          {/* TOP SECTION: ACTIVE APPOINTMENTS (Horizontal List) */}
+          {activeAppointments.length > 0 && (
+            <div className="animate-in slide-in-from-top-10 duration-500">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-black uppercase tracking-[0.3em] text-purple-400">Your Active Consultations</h3>
+                <span className="bg-purple-500/10 text-purple-400 text-[10px] px-2 py-0.5 rounded-full border border-purple-500/20 font-black">
+                  {activeAppointments.length} ACTIVE
+                </span>
+              </div>
+              <div className="flex gap-4 overflow-x-auto pb-4 pt-1 no-scrollbar">
+                {activeAppointments.map(appt => (
+                  <div key={appt._id} className="min-w-[300px] bg-slate-900/60 backdrop-blur-xl border border-white/10 p-5 rounded-[2rem] relative group border-l-4 border-l-purple-500 shadow-xl">
+                    <button 
+                      onClick={() => cancelAppointment(appt._id)}
+                      className="absolute top-4 right-4 p-1.5 bg-red-500/10 text-red-400 rounded-full opacity-0 group-hover:opacity-100 transition hover:bg-red-500 hover:text-white"
+                      title="Cancel Appointment"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                        <Video className="w-6 h-6 text-purple-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-white font-bold text-sm">Dr. {appt.doctorName || "Psychiatrist"}</h4>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-widest">{appt.date} • {appt.timeSlot}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between">
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${appt.status === 'accepted' || appt.status === 'Confirmed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                        {appt.status === 'accepted' || appt.status === 'Confirmed' ? 'Confirmed • Live' : 'Pending'}
+                      </span>
+                      {appt.status === 'accepted' && (
+                        <div className="flex items-center gap-1.5 text-[9px] text-green-500 font-bold animate-pulse">
+                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                          STANDBY
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* MAIN SECTION: SEARCH & BOOKING */}
+          {showBookingSummary ? (
             <BookingSummaryView />
-            
-            {/* Medical History Section */}
-            {pastAppointments.length > 0 && (
+          ) : (
+            <div className="flex flex-col gap-8">
+              <div className="max-w-2xl">
+                <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">Consult Top Doctors</h1>
+                <p className="text-gray-400 mt-3 text-lg leading-relaxed">Book a new appointment and get expert medical advice instantly.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {doctors.map((doc) => (
+                  <DoctorCard key={doc.id} doctor={doc} />
+                ))}
+              </div>
               <div className="bg-slate-900/40 backdrop-blur-md border border-white/10 p-8 rounded-[2.5rem] mt-4">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-purple-500/20 rounded-lg">
@@ -788,38 +864,9 @@ const ConsultationPage = () => {
                   ))}
                 </div>
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="h-full flex flex-col">
-            <div className="mb-8 mt-4">
-              <h1 className="text-3xl font-bold text-white">Consult Top Doctors</h1>
-              <p className="text-gray-400 mt-2">Book an appointment and get expert medical advice from the comfort of your home.</p>
             </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
-              {doctors.map((doc) => (
-                <DoctorCard key={doc.id} doctor={doc} />
-              ))}
-            </div>
-
-            {receivingCall && !callAccepted && (
-              <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur border-2 border-green-500 p-6 rounded-3xl shadow-2xl flex items-center gap-6 z-[60] animate-bounce">
-                <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
-                  <Phone className="w-6 h-6 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="text-white font-bold">{name}</h3>
-                  <p className="text-xs text-gray-400">is calling you for a consultation...</p>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => answerCall(activeAppointmentId)} className="px-6 py-2 bg-green-500 text-white rounded-full font-bold hover:bg-green-600">Answer</button>
-                  <button onClick={leaveCall} className="p-2 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500 hover:text-white dark:hover:text-white"><X /></button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
 
         {/* CONFIRMATION MODAL */}
         {showConfirmModal && selectedSlot && (

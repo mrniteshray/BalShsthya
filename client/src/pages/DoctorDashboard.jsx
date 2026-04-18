@@ -150,6 +150,14 @@ const DoctorDashboard = () => {
             toast(`Incoming call for patient consultation...`);
         });
 
+        socket.on("appointment-cancelled", (data) => {
+            console.log("Appointment cancelled by patient:", data.appointmentId);
+            setAppointments(prev => prev.filter(app => String(app._id) !== String(data.appointmentId)));
+            if (activeRequest?._id === data.appointmentId) setActiveRequest(null);
+            if (selectedAppt?._id === data.appointmentId) setSelectedAppt(null);
+            toast.error("An appointment has been cancelled by the patient.");
+        });
+
         socket.on("incoming-slot-request", (data) => {
             console.log("--- DASHBOARD RECEIVED SLOT REQUEST ---");
             console.log("Request Data:", data);
