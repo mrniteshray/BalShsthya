@@ -45,11 +45,9 @@ const ConsultationPage = () => {
   const [showBookingSummary, setShowBookingSummary] = useState(false);
   const [selectedDay, setSelectedDay] = useState(0); // 0: Today, 1: Tomorrow, 2: day after
   const [selectedSlot, setSelectedSlot] = useState(null);
-
-  // Slot booking specific state
   const [isBooking, setIsBooking] = useState(false);
-  const [bookingStatus, setBookingStatus] = useState(null);
-  const [isConfirmationMinimized, setIsConfirmationMinimized] = useState(false);
+  const [bookingStatus, setBookingStatus] = useState(null); // 'pending', 'accepted', 'rejected'
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [notification, setNotification] = useState(null);
 
   // WebRTC State
@@ -138,7 +136,6 @@ const ConsultationPage = () => {
               setSelectedDay(dayMap[activeAppt.date] || 0);
 
               setBookingStatus(activeAppt.status === 'Confirmed' ? 'accepted' : activeAppt.status.toLowerCase());
-              setIsConfirmationMinimized(true); // Don't pop up modal immediately on mount restore
               setShowBookingSummary(true);
             }
           }
@@ -241,7 +238,6 @@ const ConsultationPage = () => {
       const slotVal = data.slot || data.timeSlot;
       setBookingStatus(data.status);
       setIsBooking(false);
-      setIsConfirmationMinimized(false); // Show the modal when it arrives
 
       setNotification({
         title: data.status === 'accepted' ? 'Slot Confirmed!' : 'Slot Unavailable',
@@ -397,7 +393,6 @@ const ConsultationPage = () => {
 
   /* ---------------- EFFECTS ---------------- */
   const callInitiated = useRef(false);
-  const [doctorSocketId, setDoctorSocketId] = useState("");
 
   // Fix: Ensure local stream is attached when modal opens or stream starts
   useEffect(() => {
@@ -425,19 +420,6 @@ const ConsultationPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVideoCallOpen, facingMode]);
 
-  // Effect to automatically answer the doctor once everything is ready
-  useEffect(() => {
-    if (receivingCall && isVideoCallOpen && !callAccepted && stream && callerSignal && !callInitiated.current) {
-      console.log("--- AUTO-ANSWERING DOCTOR ---", caller);
-      // The new architecture doesn't auto-answer with `answerCall` directly,
-      // but rather `acceptLiveCall` is triggered by user interaction (toast button).
-      // This block might need re-evaluation or removal depending on desired flow.
-      // For now, commenting out the `answerCall()` call as it's replaced.
-      // answerCall();
-      callInitiated.current = true;
-    }
-  }, [receivingCall, isVideoCallOpen, callAccepted, stream, caller, callerSignal]);
-
   /* ---------------- CONTROLS ---------------- */
   const toggleMute = () => {
     if (!stream) return;
@@ -460,69 +442,36 @@ const ConsultationPage = () => {
   };
 
   /* ---------------- BOOKING FUNCTIONS ---------------- */
-  const handleRequestSlot = async (slotToBook) => {
-    const targetSlot = slotToBook || selectedSlot;
-    if (!targetSlot) {
-      alert("Please select a slot first!");
-      return;
-    }
-
-    setIsBooking(true);
-    setBookingStatus('pending');
-
-    try {
-      // 1. Save appointment request to Database
-      const dateVal = selectedDay === 0 ? "Today" : selectedDay === 1 ? "Tomorrow" : "Day After";
-      const res = await appointmentAPI.requestAppointment({
-        doctor: selectedDoctor.id.toString(),
-        doctorName: selectedDoctor.firstName,
-        date: dateVal,
-        timeSlot: targetSlot,
-        patientName: user?.kidName || "Patient Profile",
-        parentName: user?.name || "Parent",
-        parentEmail: user?.email || "parent@example.com",
-        reason: "General Consultation"
-      });
-
-      if (res.success) {
-        // 2. Alert Doctor Real-Time with the created record's details
-        const newAppt = res.data;
-        socket.emit("request-slot", {
-          ...newAppt,
-          doctor: selectedDoctor.id, // Ensure doctor is passed for filtering
-          day: selectedDay,
-          parentSocketId: socket.id
-        });
-
-        setNotification({
-          title: 'Request Sent',
-          message: `Asking Dr. ${selectedDoctor.firstName} for the ${targetSlot} slot...`,
-          type: 'pending'
-        });
-      } else {
-        throw new Error(res.message || "Failed to request appointment");
-      }
-      // Auto-clear after 3 seconds for the 'pending' toast
-      setTimeout(() => setNotification(prev => prev?.type === 'pending' ? null : prev), 3000);
-    } catch (err) {
-      toast.error(err?.message || "Failed to request appointment");
-      setIsBooking(false);
-      setBookingStatus(null);
-    }
-  };
-
-  const handleSelectAndRequest = (slot) => {
+  const handleSelectSlot = (slot) => {
     setSelectedSlot(slot);
-    handleRequestSlot(slot);
+    setShowConfirmModal(true);
   };
 
-  const openConsultation = (doctor) => {
-    setSelectedDoctor(doctor);
-    // Instead of opening video immediately, we check for confirmation
-    if (bookingStatus === 'accepted') {
-      setIsVideoCallOpen(true);
-    } else {
-      handleRequestSlot();
+  const handleBooking = async () => {
+    if (!selectedDoctor || !selectedSlot) return;
+    
+    setShowConfirmModal(false);
+    setBookingStatus("pending");
+    setIsBooking(true);
+    
+    try {
+      const dates = ["Today", "Tomorrow", "Day After"];
+      const res = await appointmentAPI.requestAppointment({
+        doctor: selectedDoctor.id || selectedDoctor._id,
+        doctorName: `Dr. ${selectedDoctor.firstName} ${selectedDoctor.lastName}`,
+        timeSlot: selectedSlot,
+        date: dates[selectedDay]
+      });
+      
+      setActiveAppointmentId(res.appointmentId);
+      toast.success("Consultation Request Sent!");
+    } catch (error) {
+      console.error("Booking error:", error);
+      toast.error(error.message || "Failed to book slot");
+      setBookingStatus(null);
+      setSelectedSlot(null);
+    } finally {
+      setIsBooking(false);
     }
   };
 
@@ -534,7 +483,6 @@ const ConsultationPage = () => {
 
   /* ---------------- UI COMPONENTS ---------------- */
 
-  // eslint-disable-next-line react/prop-types
   // eslint-disable-next-line react/prop-types
   const DoctorCard = ({ doctor }) => (
     <div className="bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-2xl p-5 mb-4 hover:bg-slate-800/60 transition-all">
@@ -592,68 +540,6 @@ const ConsultationPage = () => {
     </div>
   );
 
-  const ConsultationReadyView = () => (
-    <div className="h-full flex flex-col items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-700">
-      <div className="bg-slate-900/40 backdrop-blur-xl border border-white/10 w-full max-w-2xl rounded-[3.5rem] p-8 md:p-14 text-center shadow-[0_0_80px_rgba(139,92,246,0.15)] relative overflow-hidden group">
-        {/* Animated Background Glows */}
-        <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-600/20 rounded-full blur-[100px] group-hover:bg-purple-600/30 transition-all duration-1000" />
-        <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-600/10 rounded-full blur-[100px] group-hover:bg-blue-600/20 transition-all duration-1000" />
-
-        <div className="w-32 h-32 bg-gradient-to-tr from-purple-600 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-10 relative shadow-2xl shadow-purple-500/40">
-          <div className="absolute inset-0 bg-white/20 rounded-full animate-ping opacity-20" />
-          <Video className="w-14 h-14 text-white" />
-          <div className="absolute -bottom-2 -right-2 bg-green-500 w-8 h-8 rounded-full border-4 border-slate-900 flex items-center justify-center">
-            <Check className="w-4 h-4 text-white stroke-[4px]" />
-          </div>
-        </div>
-
-        <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">Consultation Ready!</h2>
-        <p className="text-gray-400 text-lg md:text-xl mb-12 max-w-md mx-auto leading-relaxed">
-          Dr. <span className="text-white font-bold">{selectedDoctor?.firstName} {selectedDoctor?.lastName}</span> is in the room and waiting for you.
-        </p>
-
-        <div className="grid grid-cols-2 gap-4 mb-12">
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-3xl text-left">
-            <span className="text-[10px] uppercase tracking-[0.2em] text-purple-400 font-black block mb-2 text-center">Time Slot</span>
-            <span className="text-white font-black text-xl block text-center italic">{selectedSlot}</span>
-          </div>
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-3xl text-left">
-            <span className="text-[10px] uppercase tracking-[0.2em] text-green-400 font-black block mb-2 text-center">Room Status</span>
-            <span className="flex items-center justify-center gap-2 text-white font-black text-xl italic leading-none">
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.8)]" />
-              LIVE
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={() => openConsultation(selectedDoctor)}
-            className="w-full py-6 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-3xl font-black text-2xl shadow-[0_20px_40px_rgba(139,92,246,0.3)] transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-center gap-4 group"
-          >
-            <Video className="w-8 h-8 group-hover:scale-110 transition" />
-            JOIN CONSULTATION
-          </button>
-
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => setIsConfirmationMinimized(true)}
-              className="py-4 bg-slate-800/60 hover:bg-slate-700/80 text-white/70 hover:text-white rounded-2xl font-bold text-sm uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2"
-            >
-              <Clock className="w-4 h-4" /> View Slots
-            </button>
-            <button
-              onClick={() => { setBookingStatus(null); setSelectedSlot(null); setShowBookingSummary(false); }}
-              className="py-4 bg-red-500/5 hover:bg-red-500/10 text-red-400/70 hover:text-red-400 rounded-2xl font-bold text-sm uppercase tracking-widest transition-all border border-red-500/10 flex items-center justify-center gap-2"
-            >
-              <X className="w-4 h-4" /> Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const BookingSummaryView = () => (
     <div className="bg-slate-900/80 backdrop-blur-lg border border-slate-200 dark:border-slate-700/50 rounded-3xl p-6 h-full flex flex-col overflow-auto">
       <div className="flex justify-between items-start mb-6">
@@ -706,13 +592,13 @@ const ConsultationPage = () => {
           {selectedDoctor.availableSlots[selectedDay].map((slot) => (
             <button
               key={slot}
-              disabled={isBooking}
-              onClick={() => handleSelectAndRequest(slot)}
+              disabled={isBooking || bookingStatus === 'accepted'}
+              onClick={() => handleSelectSlot(slot)}
               className={`py-2 px-3 rounded-xl border text-sm font-medium transition ${isBooking && selectedSlot === slot ? "bg-purple-500/10 border-purple-500 text-purple-400 animate-pulse" :
-                selectedSlot === slot && bookingStatus === 'accepted' ? "bg-purple-500/20 border-purple-500 text-purple-400" :
-                  selectedSlot === slot ? "bg-purple-600 border-purple-500 text-white" :
+                selectedSlot === slot && bookingStatus === 'accepted' ? "bg-green-500/20 border-green-500 text-green-400" :
+                  selectedSlot === slot ? "bg-purple-600 border-purple-400 text-white" :
                     "bg-slate-800 border-slate-700/50 text-gray-400 hover:border-slate-500"
-                } ${isBooking ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                } ${isBooking || bookingStatus === 'accepted' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
             >
               {slot}
             </button>
@@ -740,31 +626,39 @@ const ConsultationPage = () => {
         </div>
       </div>
 
-      {/* Action Button */}
+      {/* Action Button / Success State */}
       {bookingStatus === 'accepted' ? (
-        <div className="flex flex-col gap-3 mt-auto">
-          <button
-            onClick={() => setIsConfirmationMinimized(false)}
-            className="w-full py-4 rounded-2xl font-bold text-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all flex items-center justify-center gap-3"
-          >
-            <Check className="w-5 h-5" /> Back to Ready Screen
-          </button>
-          <button
-            onClick={() => openConsultation(selectedDoctor)}
-            className="w-full py-4 rounded-2xl font-bold text-lg bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/30 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
-          >
-            <Video className="w-6 h-6" />
-            Join Call
-          </button>
+        <div className="flex flex-col gap-4 mt-auto bg-green-500/10 border border-green-500/20 p-6 rounded-[2rem] animate-in slide-in-from-bottom-5">
+           <div className="flex items-center gap-3 text-green-400 mb-2">
+              <Check className="w-6 h-6" />
+              <h4 className="font-black uppercase tracking-widest text-sm">Appointment Confirmed</h4>
+           </div>
+           <p className="text-gray-300 text-sm leading-relaxed mb-4">
+              Your appointment with <span className="text-white font-bold">Dr. {selectedDoctor.firstName}</span> is locked for <span className="text-white font-bold">{selectedSlot}</span> (Tomorrow).
+           </p>
+           <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-2">
+              <div className="flex justify-between text-[11px] uppercase tracking-wider">
+                <span className="text-gray-500">Appt ID</span>
+                <span className="text-white font-mono">{activeAppointmentId || "N/A"}</span>
+              </div>
+              <div className="flex justify-between text-[11px] uppercase tracking-wider">
+                <span className="text-gray-500">Status</span>
+                <span className="text-green-500 font-bold">LIVE ON STANDBY</span>
+              </div>
+           </div>
+           <p className="text-[10px] text-gray-500 italic mt-2">
+              The doctor will initiate the video call at your scheduled time. Please stay on this page.
+           </p>
         </div>
-      ) : isBooking ? (
-        <div className="mt-auto w-full py-4 rounded-2xl bg-slate-900/40 backdrop-blur-xl border-white/10/80 dark:bg-slate-800/50 border border-slate-700/50 text-gray-400 flex items-center justify-center gap-3">
-          <div className="w-5 h-5 border-2 border-gray-400 border-t-purple-500 rounded-full animate-spin" />
-          Waiting for Doctor Confirmation...
-        </div>
+      ) : bookingStatus === 'pending' ? (
+         <div className="mt-auto bg-yellow-500/10 border border-yellow-500/20 p-6 rounded-[2rem] flex flex-col items-center">
+            <div className="w-10 h-10 border-4 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin mb-4" />
+            <h4 className="text-yellow-500 font-black uppercase tracking-widest text-xs mb-1">Request Sent</h4>
+            <p className="text-gray-400 text-xs text-center">Waiting for Doctor &quot;{selectedDoctor.firstName}&quot; to confirm your slot...</p>
+         </div>
       ) : (
-        <div className="mt-auto text-center text-sm text-gray-500 italic p-4 bg-purple-50/50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-700/50">
-          Select a slot to check doctor availability
+        <div className="mt-auto pt-6 text-center">
+          <p className="text-xs text-gray-500 italic">Select a slot above and confirm your booking.</p>
         </div>
       )}
     </div>
@@ -793,40 +687,6 @@ const ConsultationPage = () => {
           <button onClick={() => setNotification(null)} className="ml-auto opacity-50 hover:opacity-100">
             <X className="w-5 h-5" />
           </button>
-        </div>
-      )}
-
-      {/* Premium Success Modal */}
-      {bookingStatus === 'accepted' && !isConfirmationMinimized && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[250] flex items-center justify-center p-6 animate-in fade-in duration-500">
-          <div className="bg-slate-900/40 backdrop-blur-md border border-purple-500/30 w-full max-w-md rounded-[2.5rem] p-10 shadow-[0_0_50px_rgba(16,185,129,0.1)] flex flex-col items-center text-center animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
-            <div className="w-24 h-24 bg-purple-500/10 rounded-full flex items-center justify-center mb-8 relative">
-              <div className="absolute inset-0 bg-purple-500/20 rounded-full animate-ping opacity-20" />
-              <div className="w-16 h-16 bg-purple-500 rounded-full flex items-center justify-center shadow-lg shadow-purple-500/40">
-                <Check className="w-10 h-10 text-white stroke-[4px]" />
-              </div>
-            </div>
-
-            <h2 className="text-3xl font-black text-white mb-3">Slot Confirmed!</h2>
-            <p className="text-gray-400 text-lg mb-8">
-              Dr. <span className="text-purple-400 font-bold">{selectedDoctor?.firstName}</span> is ready for your consultation at <span className="text-white font-bold">{selectedSlot}</span>.
-            </p>
-
-            <button
-              onClick={() => openConsultation(selectedDoctor)}
-              className="w-full py-5 bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/30 rounded-2xl font-black text-xl shadow-xl shadow-purple-500/20 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3"
-            >
-              <Video className="w-7 h-7" />
-              START NOW
-            </button>
-
-            <button
-              onClick={() => { setIsConfirmationMinimized(true); }}
-              className="mt-4 text-gray-500 hover:text-gray-300 font-medium transition"
-            >
-              Close and wait
-            </button>
-          </div>
         </div>
       )}
 
@@ -878,43 +738,12 @@ const ConsultationPage = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-6 relative">
-        {bookingStatus === 'accepted' && !isConfirmationMinimized ? (
-          <ConsultationReadyView />
-        ) : !showBookingSummary ? (
-          <div className="h-full flex flex-col">
-            <div className="mb-8 mt-4">
-              <h1 className="text-3xl font-bold text-white">Consult Top Doctors</h1>
-              <p className="text-gray-400 mt-2">Book an appointment and get expert medical advice from the comfort of your home.</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
-              {doctors.map((doc) => (
-                <DoctorCard key={doc.id} doctor={doc} />
-              ))}
-            </div>
-
-            {receivingCall && !callAccepted && (
-              <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur border-2 border-green-500 p-6 rounded-3xl shadow-2xl flex items-center gap-6 z-[60] animate-bounce">
-                <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
-                  <Phone className="w-6 h-6 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="text-white font-bold">{name}</h3>
-                  <p className="text-xs text-gray-400">is calling you for a consultation...</p>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => answerCall(activeAppointmentId)} className="px-6 py-2 bg-green-500 text-white rounded-full font-bold hover:bg-green-600">Answer</button>
-                  <button onClick={leaveCall} className="p-2 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500 hover:text-white dark:hover:text-white"><X /></button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
+      <div className="flex-1 p-4 md:p-8 h-full">
+        {isBooking || bookingStatus || showBookingSummary ? (
           <div className="h-full max-w-4xl mx-auto flex flex-col gap-8">
             <BookingSummaryView />
             
-            {/* Medical History Section - Only shown when summary is visible */}
+            {/* Medical History Section */}
             {pastAppointments.length > 0 && (
               <div className="bg-slate-900/40 backdrop-blur-md border border-white/10 p-8 rounded-[2.5rem] mt-4">
                 <div className="flex items-center gap-3 mb-6">
@@ -960,6 +789,69 @@ const ConsultationPage = () => {
                 </div>
               </div>
             )}
+          </div>
+        ) : (
+          <div className="h-full flex flex-col">
+            <div className="mb-8 mt-4">
+              <h1 className="text-3xl font-bold text-white">Consult Top Doctors</h1>
+              <p className="text-gray-400 mt-2">Book an appointment and get expert medical advice from the comfort of your home.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
+              {doctors.map((doc) => (
+                <DoctorCard key={doc.id} doctor={doc} />
+              ))}
+            </div>
+
+            {receivingCall && !callAccepted && (
+              <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur border-2 border-green-500 p-6 rounded-3xl shadow-2xl flex items-center gap-6 z-[60] animate-bounce">
+                <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+                  <Phone className="w-6 h-6 text-green-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold">{name}</h3>
+                  <p className="text-xs text-gray-400">is calling you for a consultation...</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => answerCall(activeAppointmentId)} className="px-6 py-2 bg-green-500 text-white rounded-full font-bold hover:bg-green-600">Answer</button>
+                  <button onClick={leaveCall} className="p-2 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500 hover:text-white dark:hover:text-white"><X /></button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CONFIRMATION MODAL */}
+        {showConfirmModal && selectedSlot && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[500] flex items-center justify-center p-6 animate-in fade-in duration-300">
+             <div className="bg-slate-900 border border-white/10 w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                <div className="w-16 h-16 bg-purple-500/20 rounded-2xl flex items-center justify-center mb-6">
+                   <Clock className="w-8 h-8 text-purple-400" />
+                </div>
+                <h3 className="text-2xl font-black text-white mb-2">Confirm Booking</h3>
+                <p className="text-gray-400 mb-8 text-sm leading-relaxed">
+                  Confirm appointment with <span className="text-white font-bold">Dr. {selectedDoctor.firstName}</span> for:
+                  <br />
+                  <span className="text-purple-400 font-bold block mt-2 text-lg">
+                    {["Today", "Tomorrow", "Day After"][selectedDay]}, {selectedSlot}
+                  </span>
+                </p>
+                
+                <div className="flex flex-col gap-3">
+                   <button 
+                     onClick={handleBooking}
+                     className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black text-lg transition shadow-lg shadow-purple-500/20"
+                   >
+                     Confirm Booking
+                   </button>
+                   <button 
+                     onClick={() => setShowConfirmModal(false)}
+                     className="w-full py-3 text-gray-500 font-bold hover:text-white transition"
+                   >
+                     Cancel
+                   </button>
+                </div>
+             </div>
           </div>
         )}
 
