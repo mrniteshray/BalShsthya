@@ -10,18 +10,23 @@ export const requestAppointment = async (req, res) => {
         const doctorIdToSave = doctor || legacyDoctorId;
         const parentId = req.user.id; // from auth middleware
 
-        // Fallback: If patientName is not provided by frontend, fetch from parent profile
+        // Fallback: Populate missing parent info from user profile
+        let finalParentName = parentName;
+        let finalParentEmail = parentEmail;
         let finalPatientName = patientName;
-        if (!finalPatientName) {
+
+        if (!finalParentName || !finalParentEmail || !finalPatientName) {
             const parentProfile = await mongoose.model('user').findById(parentId);
-            finalPatientName = parentProfile?.kidName || "Patient Profile";
+            if (!finalParentName) finalParentName = parentProfile?.name || "Parent User";
+            if (!finalParentEmail) finalParentEmail = parentProfile?.email || "parent@example.com";
+            if (!finalPatientName) finalPatientName = parentProfile?.kidName || "Patient Profile";
         }
 
         const newAppointment = new Appointment({
             parent: parentId,
             doctor: doctorIdToSave,
-            parentName,
-            parentEmail,
+            parentName: finalParentName,
+            parentEmail: finalParentEmail,
             patientName: finalPatientName,
             doctorName,
             date,
