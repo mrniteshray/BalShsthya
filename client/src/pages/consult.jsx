@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
@@ -83,80 +83,70 @@ const ConsultationPage = () => {
   const userVideo = useRef();
   const connectionRef = useRef();
 
-  /* ---------------- FETCH DATA ON MOUNT ---------------- */
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoadingDoctors(true);
-        // 1. Fetch Doctors
-        const docRes = await appointmentAPI.getDoctors();
-        let normalizedDoctors = [];
-        if (docRes.success) {
-          normalizedDoctors = docRes.data.map(d => {
-            let slots = d.availableSlots || ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "04:00 PM"];
-            const normalizedSlots = (Array.isArray(slots))
-              ? { 0: slots, 1: slots, 2: slots }
-              : slots;
+  const refreshData = useCallback(async () => {
+    try {
+      setLoadingDoctors(true);
+      const doctorsRes = await appointmentAPI.getDoctors();
+      
+      let normalizedDoctors = [];
+      if (doctorsRes.success) {
+        normalizedDoctors = doctorsRes.data.map((d) => {
+          let slots = d.availableSlots || ["09:00 AM", "10:00 AM", "11:00 AM", "02:00 PM", "04:00 PM"];
+          const normalizedSlots = (Array.isArray(slots))
+            ? { 0: slots, 1: slots, 2: slots }
+            : slots;
 
-            return {
-              ...d,
-              id: d._id || d.id,
-              firstName: d.firstName || d.firstname || "Doctor",
-              lastName: d.lastName || d.lastName || "",
-              specialization: d.specialization || "General Physician",
-              languages: Array.isArray(d.languages) ? d.languages : ["English"],
-              tags: Array.isArray(d.tags) ? d.tags : ["General"],
-              availableSlots: normalizedSlots,
-              image: d.image || "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300&h=300"
-            };
-          });
-          setDoctors(normalizedDoctors);
-        }
+          return {
+            ...d,
+            id: (d._id || d.id).toString(),
+            firstName: d.firstName || d.firstname || "Doctor",
+            lastName: d.lastName || d.lastName || "",
+            specialization: d.specialization || "General Physician",
+            rating: d.rating || 5.0,
+            experience: d.experience || 5,
+            languages: d.languages || ["English"],
+            image: d.profileImage || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.firstName}`,
+            availableSlots: normalizedSlots,
+            tags: d.tags || ["Top Doctor", "Verified"]
+          };
+        });
+        setDoctors(normalizedDoctors);
+      }
 
-        // 2. Fetch Parent's existing appointments to restore state
+      if (user?.id || user?._id) {
         const apptRes = await appointmentAPI.getParentAppointments();
-        if (apptRes.success && apptRes.data.length > 0) {
-          // Look for most recent Pending or Confirmed/Rescheduled appointment
-          const activeAppt = apptRes.data.find(a =>
-            ['Pending', 'Confirmed', 'Rescheduled'].includes(a.status)
-          );
-
+        if (apptRes.success && apptRes.data) {
+          const activeAppt = apptRes.data.find(a => ['Pending', 'Confirmed', 'accepted'].includes(a.status));
+          
           if (activeAppt) {
-            console.log("Restoring active appointment state:", activeAppt);
-            // Find the full doctor object to set as selected
-            const doc = normalizedDoctors.find(d =>
-              String(d.id) === String(activeAppt.doctor)
-            );
-
+            const doc = normalizedDoctors.find(d => String(d.id) === String(activeAppt.doctor));
             if (doc) {
               setSelectedDoctor(doc);
               setSelectedSlot(activeAppt.timeSlot);
-
-              // Restore selectedDay based on date string
               const dayMap = { "Today": 0, "Tomorrow": 1, "Day After": 2 };
               setSelectedDay(dayMap[activeAppt.date] || 0);
-
               setBookingStatus(activeAppt.status === 'Confirmed' ? 'accepted' : activeAppt.status.toLowerCase());
               setShowBookingSummary(true);
             }
           }
 
-          // Store active appointments for the horizontal list
-          const active = apptRes.data.filter(a => ['pending', 'accepted', 'Confirmed'].includes(a.status));
+          const active = apptRes.data.filter(a => ['Pending', 'Confirmed', 'accepted', 'pending'].includes(a.status));
           setActiveAppointments(active);
 
-          // 3. Store completed appointments for Medical History
           const completed = apptRes.data.filter(a => a.status === 'Completed');
           setPastAppointments(completed);
         }
-      } catch (err) {
-        console.error("Failed to fetch initial data:", err);
-      } finally {
-        setLoadingDoctors(false);
       }
-    };
-    fetchData();
-  }, []);
+    } catch (err) {
+      console.error("Failed to fetch initial data:", err);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
 
   /* ---------------- SOCKET EVENTS ---------------- */
   useEffect(() => {
@@ -380,20 +370,19 @@ const ConsultationPage = () => {
         socket.emit("end-call", { appointmentId: activeAppointmentId });
     }
     setCallEnded(true);
-    if (connectionRef.current) {
-      connectionRef.current.destroy();
-      connectionRef.current = null;
-    }
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-    }
     setIsVideoCallOpen(false);
-    setCallAccepted(false);
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    setStream(null);
     setReceivingCall(false);
-    setActiveAppointmentId("");
+    setCallAccepted(false);
+    setCallerSignal(null);
     callInitiated.current = false;
-    socket.off("webrtc-signal");
+    
+    // Refresh medical records immediately after call ends 
+    // to pick up any notes saved by the doctor
+    setTimeout(() => refreshData(), 2000); 
   };
 
   /* ---------------- EFFECTS ---------------- */
@@ -821,48 +810,52 @@ const ConsultationPage = () => {
                   <DoctorCard key={doc.id} doctor={doc} />
                 ))}
               </div>
-              <div className="bg-slate-900/40 backdrop-blur-md border border-white/10 p-8 rounded-[2.5rem] mt-4">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-purple-500/20 rounded-lg">
-                    <FileText className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <h3 className="text-xl font-bold text-white">Your Medical Records</h3>
+            </div>
+          )}
+
+          {/* MEDICAL RECORDS SECTION (Always at the bottom) */}
+          {pastAppointments.length > 0 && (
+            <div className="bg-slate-900/40 backdrop-blur-md border border-white/10 p-8 rounded-[2.5rem]">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-purple-500/20 rounded-lg">
+                  <FileText className="w-5 h-5 text-purple-400" />
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {pastAppointments.map(app => (
-                    <div key={app._id} className="bg-white/5 border border-white/10 p-5 rounded-3xl hover:bg-white/10 transition group">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <p className="text-[10px] uppercase font-black text-purple-400 tracking-[0.2em] mb-1">{app.date}</p>
-                          <h4 className="text-white font-bold italic">Dr. {app.doctorName || "Nitesh Ray"}</h4>
-                        </div>
-                        <span className="bg-green-500/10 text-green-400 text-[10px] px-2 py-0.5 rounded-full border border-green-500/20 font-black">COMPLETED</span>
+                <h3 className="text-xl font-bold text-white">Your Medical Records</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pastAppointments.map(app => (
+                  <div key={app._id} className="bg-white/5 border border-white/10 p-5 rounded-3xl hover:bg-white/10 transition group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-[10px] uppercase font-black text-purple-400 tracking-[0.2em] mb-1">{app.date}</p>
+                        <h4 className="text-white font-bold italic">Dr. {app.doctorName || "Nitesh Ray"}</h4>
                       </div>
-                      
-                      <div className="space-y-3">
-                        {app.diagnosis && (
-                          <div>
-                            <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Diagnosis</p>
-                            <p className="text-sm text-white/90 font-medium leading-tight">{app.diagnosis}</p>
-                          </div>
-                        )}
-                        {app.prescriptions && (
-                          <div>
-                            <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Prescriptions</p>
-                            <p className="text-sm text-purple-200 font-bold whitespace-pre-line leading-tight">{app.prescriptions}</p>
-                          </div>
-                        )}
-                        {app.notes && (
-                          <div className="pt-2 border-t border-white/5">
-                            <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Advice</p>
-                            <p className="text-xs text-white/60 italic leading-snug">&quot;{app.notes}&quot;</p>
-                          </div>
-                        )}
-                      </div>
+                      <span className="bg-green-500/10 text-green-400 text-[10px] px-2 py-0.5 rounded-full border border-green-500/20 font-black">COMPLETED</span>
                     </div>
-                  ))}
-                </div>
+                    
+                    <div className="space-y-3">
+                      {app.diagnosis && (
+                        <div>
+                          <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Diagnosis</p>
+                          <p className="text-sm text-white/90 font-medium leading-tight">{app.diagnosis}</p>
+                        </div>
+                      )}
+                      {app.prescriptions && (
+                        <div>
+                          <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Prescriptions</p>
+                          <p className="text-sm text-purple-200 font-bold whitespace-pre-line leading-tight">{app.prescriptions}</p>
+                        </div>
+                      )}
+                      {app.notes && (
+                        <div className="pt-2 border-t border-white/5">
+                          <p className="text-[9px] uppercase font-black text-white/40 tracking-widest mb-1">Advice</p>
+                          <p className="text-xs text-white/60 italic leading-snug">&quot;{app.notes}&quot;</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
