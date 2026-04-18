@@ -297,17 +297,10 @@ const ConsultationPage = () => {
       
       socket.emit("join-appointment-room", appointmentId);
       
-      // Establish listeners BEFORE emitting accept-call to avoid race conditions
-      socket.on("webrtc-signal", (signal) => {
-          if (connectionRef.current) {
-              connectionRef.current.signal(signal);
-          }
-      });
-
+      // 1. Start Camera First
       await startCamera();
       
-      socket.emit("accept-call", { appointmentId });
-
+      // 2. Create Peer instance
       const peer = new Peer({
           initiator: false,
           trickle: false,
@@ -315,9 +308,17 @@ const ConsultationPage = () => {
           config: {
               iceServers: [
                   { urls: 'stun:stun.l.google.com:19302' },
+                  { urls: 'stun:stun1.l.google.com:19302' },
+                  { urls: 'stun:stun2.l.google.com:19302' },
                   { urls: 'stun:global.stun.twilio.com:3478' }
               ]
           }
+      });
+
+      // 3. Setup signaling listener for THIS specific peer
+      socket.on("webrtc-signal", (signal) => {
+          console.log("[Video-Debug] Received signal for peer:", signal.type || "ice-candidate");
+          peer.signal(signal);
       });
 
       peer.on("signal", (data) => {
@@ -328,12 +329,16 @@ const ConsultationPage = () => {
       });
 
       peer.on("stream", (currentStream) => {
+          console.log("[Video-Debug] Received remote stream");
           if (userVideo.current) {
                userVideo.current.srcObject = currentStream;
           }
       });
       
       connectionRef.current = peer;
+
+      // 4. Finally, notify doctor we are ready (this triggers doctor's offer)
+      socket.emit("accept-call", { appointmentId });
   };
 
   const rejectLiveCall = (appointmentId) => {

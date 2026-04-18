@@ -169,7 +169,6 @@ const DoctorDashboard = () => {
              toast(`Patient has joined the room. Connecting video...`);
              
              // Doctor is caller so initiate peer
-             // Use the latest stream from a ref or state
              const peer = new Peer({
                  initiator: true,
                  trickle: false,
@@ -177,6 +176,8 @@ const DoctorDashboard = () => {
                  config: {
                      iceServers: [
                          { urls: 'stun:stun.l.google.com:19302' },
+                         { urls: 'stun:stun1.l.google.com:19302' },
+                         { urls: 'stun:stun2.l.google.com:19302' },
                          { urls: 'stun:global.stun.twilio.com:3478' }
                      ]
                  }
@@ -190,13 +191,16 @@ const DoctorDashboard = () => {
              });
              
              peer.on("stream", (currentStream) => {
+                 console.log("--- DOCTOR RECEIVED REMOTE STREAM ---");
                  if (userVideo.current) {
                      userVideo.current.srcObject = currentStream;
                  }
              });
              
-             // Setup signal listener immediately
+             // Setup signal listener specifically for this peer session
+             socket.off("webrtc-signal"); // Clear any previous ones
              socket.on("webrtc-signal", (signal) => {
+                 console.log("--- DOCTOR RECEIVED SIGNAL ---", signal.type || "ice-candidate");
                  peer.signal(signal);
              });
              
