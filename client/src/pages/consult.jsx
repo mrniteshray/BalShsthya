@@ -196,11 +196,11 @@ const ConsultationPage = () => {
         <div className="flex flex-col gap-2">
            <span className="font-bold">Dr. {data.doctorName} is calling...</span>
            <div className="flex gap-2">
-               <button 
+                <button 
                   onClick={() => {
                     console.log("[Video-Debug] Accept clicked for appt:", data.appointmentId);
                     toast.dismiss(t.id);
-                    answerCall();
+                    answerCall(data.appointmentId);
                   }}
                   className="bg-green-500 text-white px-3 py-1 rounded text-sm font-bold"
                >
@@ -292,12 +292,15 @@ const ConsultationPage = () => {
   };
 
   /* ---------------- WEBRTC FUNCTIONS ---------------- */
-  const answerCall = async () => {
-      const apptId = activeAppointmentId;
+  const answerCall = async (id) => {
+      const apptId = id || activeAppointmentId;
       if (!apptId) {
           console.error("[Video-Debug] No active appointment ID to answer.");
           return;
       }
+
+      // If we got an ID but state isn't set yet, sync it
+      if (id) setActiveAppointmentId(id);
 
       // 1. Start Camera and await it FIRST
       const currentStream = await startCamera();
@@ -888,7 +891,7 @@ const ConsultationPage = () => {
                   <p className="text-xs text-gray-400">is calling you for a consultation...</p>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={answerCall} className="px-6 py-2 bg-green-500 text-white rounded-full font-bold hover:bg-green-600">Answer</button>
+                  <button onClick={() => answerCall(activeAppointmentId)} className="px-6 py-2 bg-green-500 text-white rounded-full font-bold hover:bg-green-600">Answer</button>
                   <button onClick={leaveCall} className="p-2 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500 hover:text-white dark:hover:text-white"><X /></button>
                 </div>
               </div>

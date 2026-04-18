@@ -315,13 +315,19 @@ const DoctorDashboard = () => {
         }
     };
 
-    const answerCall = async () => {
+    const answerCall = async (id) => {
         setReceivingCall(false);
         setCallAccepted(true);
         setIsVideoCallOpen(true);
         
-        const apptId = activeRequest?._id || selectedAppt?._id;
+        const apptId = id || activeRequest?._id || selectedAppt?._id;
         if (!apptId) return;
+
+        if (id) {
+            // If we are answering a specific request, ensure it's selected
+            const req = appointments.find(a => a._id === id) || activeRequest;
+            if (req) setSelectedAppt(req);
+        }
 
         socket.emit("join-appointment-room", apptId);
         await startCamera();
@@ -859,7 +865,7 @@ const DoctorDashboard = () => {
                                             <div>
                                                 <h3 className="text-white font-bold">{selectedAppt?.patientName} is calling...</h3>
                                             </div>
-                                            <button onClick={answerCall} className="px-6 py-2 bg-purple-500 text-white rounded-full font-bold hover:bg-purple-600">Accept</button>
+                                            <button onClick={() => answerCall(activeRequest?._id)} className="px-6 py-2 bg-purple-500 text-white rounded-full font-bold hover:bg-purple-600">Accept</button>
                                         </div>
                                     )}
                                 </div>
