@@ -168,14 +168,15 @@ const DoctorDashboard = () => {
              setCallAccepted(true);
              toast(`Patient has joined the room. Connecting video...`);
              
-             // Use a stable ID for signaling
+             // Use a stable ID and current stream for signaling
              const apptId = selectedAppt?._id;
+             const activeStream = stream || myVideo.current?.srcObject;
 
              // Doctor is caller so initiate peer
              const peer = new Peer({
                  initiator: true,
                  trickle: false,
-                 stream: stream || myVideo.current?.srcObject,
+                 stream: activeStream,
                  config: {
                      iceServers: [
                          { urls: 'stun:stun.l.google.com:19302' },
@@ -234,7 +235,7 @@ const DoctorDashboard = () => {
             socket.off("webrtc-signal");
             socket.off("call-ended");
         };
-    }, [selectedAppt?._id, stream]); // Keep stream in deps to ensure peer gets latest stream if it arrives late
+    }, [selectedAppt?._id]); // Removed stream from dependencies to prevent listener reset mid-call
 
 
     // Explicitly join room when user ID is available
@@ -273,9 +274,11 @@ const DoctorDashboard = () => {
             }
             setIsMuted(false);
             setIsCameraOff(false);
+            return currentStream;
         } catch (error) {
             console.error("Error accessing media devices:", error);
             toast.error("Please allow camera and microphone access.");
+            return null;
         }
     };
 

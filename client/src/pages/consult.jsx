@@ -283,36 +283,39 @@ const ConsultationPage = () => {
       }
       setIsMuted(false);
       setIsCameraOff(false);
+      return currentStream;
     } catch (error) {
       console.error("Error accessing media devices:", error);
-      alert("Please allow camera and microphone access.");
+      toast.error("Please allow camera and microphone access.");
+      return null;
     }
   };
 
   /* ---------------- WEBRTC FUNCTIONS ---------------- */
   const answerCall = async () => {
-      // 1. Immediately set states to open UI
-      setReceivingCall(false);
-      setCallAccepted(true);
-      setIsVideoCallOpen(true);
-      
       const apptId = activeAppointmentId;
       if (!apptId) {
           console.error("[Video-Debug] No active appointment ID to answer.");
           return;
       }
 
-      console.log("[Video-Debug] Answering call for appointment:", apptId);
+      // 1. Start Camera and await it FIRST
+      const currentStream = await startCamera();
+      if (!currentStream) return;
+
+      // 2. Immediately set states to open UI
+      setReceivingCall(false);
+      setCallAccepted(true);
+      setIsVideoCallOpen(true);
+      
+      console.log("[Video-Debug] Answering call with active stream for appt:", apptId);
       socket.emit("join-appointment-room", apptId);
       
-      // 2. Start Camera and await it
-      await startCamera();
-      
-      // 3. Create Peer instance
+      // 3. Create Peer instance using the DIRECT stream
       const peer = new Peer({
           initiator: false,
           trickle: false,
-          stream: stream || myVideo.current?.srcObject,
+          stream: currentStream,
           config: {
               iceServers: [
                   { urls: 'stun:stun.l.google.com:19302' },
@@ -389,8 +392,7 @@ const ConsultationPage = () => {
 
   useEffect(() => {
     if (isVideoCallOpen) {
-      startCamera();
-      // Also notify the doctor that patient has joined the room
+      // Notify the doctor that patient has joined the room
       if (selectedDoctor) {
         socket.emit("notify-patient-ready", {
           doctorId: selectedDoctor.id || selectedDoctor._id,
