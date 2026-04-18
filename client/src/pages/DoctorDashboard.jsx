@@ -840,9 +840,9 @@ const DoctorDashboard = () => {
 
             {/* FULL SCREEN VIDEO CONSULTATION SPLIT-MODAL */}
             {isVideoCallOpen && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md border-white/10 z-[100] flex animate-in fade-in zoom-in-95 duration-300">
+                <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl border-white/10 z-[100] flex animate-in fade-in zoom-in-95 duration-300">
                     {/* LEFT SIDE: VIDEO ROOM */}
-                    <div className={`${isNotesPanelOpen ? 'w-2/3' : 'w-full'} h-full flex flex-col bg-purple-50/50 dark:bg-black relative border-r border-white/10 transition-all duration-500 ease-in-out`}>
+                    <div className={`${isNotesPanelOpen ? 'w-[70%]' : 'w-full'} h-full flex flex-col bg-slate-950 relative border-r border-white/10 transition-all duration-500 ease-in-out`}>
                         <div className="absolute top-4 left-4 z-20 flex items-center gap-3 bg-slate-900/40 backdrop-blur-xl border-white/10/90 dark:bg-slate-900/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-200 dark:border-white/10">
                             <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                             <span className="text-white font-bold tracking-widest text-sm">LIVE</span>
@@ -898,15 +898,15 @@ const DoctorDashboard = () => {
                         </div>
 
                         {/* VIDEO CONTROLS */}
-                        <div className="h-24 bg-purple-50/50 dark:bg-slate-950 flex items-center justify-center gap-6 relative">
+                        <div className="h-28 bg-slate-900/80 backdrop-blur-xl border-t border-white/10 flex items-center justify-center gap-8 relative shrink-0">
                             {/* Toggle File Button */}
                             <button
                                 onClick={() => setIsNotesPanelOpen(!isNotesPanelOpen)}
-                                className={`absolute left-8 flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${isNotesPanelOpen ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/20' : 'bg-slate-800 border-white/10 text-slate-400 hover:text-white'}`}
+                                className={`absolute left-10 flex items-center gap-3 px-5 py-2.5 rounded-2xl border transition-all ${isNotesPanelOpen ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-500/20' : 'bg-slate-800 border-white/10 text-slate-400 hover:text-white'}`}
                                 title={isNotesPanelOpen ? "Hide Consultation File" : "Show Consultation File"}
                             >
                                 <FileText className="w-5 h-5" />
-                                <span className="font-bold text-sm">{isNotesPanelOpen ? "Hide File" : "Show File"}</span>
+                                <span className="font-black text-xs uppercase tracking-widest">{isNotesPanelOpen ? "Hide File" : "Show File"}</span>
                             </button>
 
                             <button onClick={toggleMute} className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isMuted ? "bg-red-500 text-white" : "bg-slate-800 text-slate-200 hover:bg-slate-700"}`}>
@@ -923,7 +923,7 @@ const DoctorDashboard = () => {
 
                     {/* RIGHT SIDE: PATIENT CONTEXT & FORMS */}
                     {isNotesPanelOpen && (
-                        <div className="w-1/3 h-full bg-slate-900/40 backdrop-blur-md border-white/10 overflow-y-auto purple-scrollbar flex flex-col p-6 border-l border-white/10 shadow-[-20px_0_50px_rgba(0,0,0,0.5)] z-20 animate-in slide-in-from-right-full duration-500">
+                        <div className="w-[30%] h-full bg-slate-900/40 backdrop-blur-md border-white/10 overflow-y-auto purple-scrollbar flex flex-col p-6 border-l border-white/10 shadow-[-20px_0_50px_rgba(0,0,0,0.5)] z-20 animate-in slide-in-from-right-full duration-500">
                             <div className="flex justify-between items-center mb-6">
                                 <h2 className="text-2xl font-bold text-white">Consultation File</h2>
                                 <button onClick={leaveCall} className="p-2 bg-slate-800/40 backdrop-blur-md text-white font-medium hover:text-white dark:hover:text-white rounded-full transition"><X className="w-5 h-5" /></button>

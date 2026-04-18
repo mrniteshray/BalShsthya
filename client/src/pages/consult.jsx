@@ -390,8 +390,15 @@ const ConsultationPage = () => {
   };
 
   /* ---------------- EFFECTS ---------------- */
-  const [doctorSocketId, setDoctorSocketId] = useState("");
   const callInitiated = useRef(false);
+  const [doctorSocketId, setDoctorSocketId] = useState("");
+
+  // Fix: Ensure local stream is attached when modal opens or stream starts
+  useEffect(() => {
+    if (stream && myVideo.current) {
+        myVideo.current.srcObject = stream;
+    }
+  }, [stream, isVideoCallOpen]);
 
   useEffect(() => {
     if (isVideoCallOpen) {
