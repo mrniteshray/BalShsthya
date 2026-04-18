@@ -67,6 +67,9 @@ router.get('/admin/contact-messages', listContactMessages);
 
 // Appointment routes
 import {
+  requestAppointment,
+  getDoctorAppointments,
+  getParentAppointments,
   updateAppointmentStatus,
   completeConsultation,
   updateCallStatus,
