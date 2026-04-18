@@ -1,0 +1,11 @@
+
+.hero_img{
+    background-image: url(https://res.cloudinary.com/dbnticsz8/image/upload/v1734928606/Infant%20care%20Compass/raoq1dgynk244vhgzhsz.png);
+    
+}
+@media (max-width:700px) {
+    .hero_img{
+        background-image: url(https://res.cloudinary.com/dbnticsz8/image/upload/v1734930528/Infant%20care%20Compass/okfaxq2rla0sqavyyynj.png);
+    }
+  }
+  

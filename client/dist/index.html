@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <!-- <link rel="icon" type="image/svg+xml" href="/vite.svg" /> -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="faviconInfant.ico" type="image/x-icon" />
+  <title>Balswasthya Babycare</title>
+  <script>
+    window.global = window;
+    window.process = { env: {} };
+    window.onerror = function (msg, url, line, col, error) {
+      console.log('[DEBUG] Global Error: ' + msg + ' at ' + url + ':' + line + ':' + col);
+      if (error) console.log('[DEBUG] Error object:', error);
+      return false;
+    };
+    window.onunhandledrejection = function (event) {
+      console.log('[DEBUG] Global Unhandled Rejection:', event.reason);
+    };
+    console.log('[DEBUG] Early diagnostic script loaded');
+  </script>
+  <script type="module" crossorigin src="/assets/index-CIkmWuFY.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-Cxqu80DX.css">
+</head>
+
+<body>
+  <div id="root"></div>
+</body>
+
+</html>
