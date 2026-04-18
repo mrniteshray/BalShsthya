@@ -66,6 +66,15 @@ export const appointmentAPI = {
         }
     },
 
+    deleteAppointment: async (id) => {
+        try {
+            const response = await createAuthInstance().delete(`/appointments/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || { message: 'Failed to cancel appointment' };
+        }
+    },
+
     updateCallStatus: async (id, callStatus) => {
         try {
             const cleanId = String(id).trim();

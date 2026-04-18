@@ -67,12 +67,10 @@ router.get('/admin/contact-messages', listContactMessages);
 
 // Appointment routes
 import {
-  requestAppointment,
-  getDoctorAppointments,
-  getParentAppointments,
   updateAppointmentStatus,
   completeConsultation,
-  updateCallStatus
+  updateCallStatus,
+  deleteAppointment
 } from '../controller/appointmentController.js';
 
 router.post('/appointments', authtoken, requestAppointment);
@@ -81,6 +79,7 @@ router.get('/appointments/parent', authtoken, getParentAppointments);
 router.patch('/appointments/:id/status', authtoken, updateAppointmentStatus);
 router.patch('/appointments/:id/call-status', authtoken, updateCallStatus);
 router.post('/appointments/:id/complete', authtoken, completeConsultation);
+router.delete('/appointments/:id', authtoken, deleteAppointment);
 
 
 // FeedLog routes
