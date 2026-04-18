@@ -13,7 +13,7 @@ import {
   X,
   Home,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { setUser } from "../store/slices/userSlice.jsx";
 import { Toaster, toast } from 'react-hot-toast';
@@ -455,12 +455,12 @@ export default function Signin() {
         <div className="text-center mt-8 animate-fadeIn" style={{ animationDelay: '0.4s' }}>
           <p className="text-gray-600">
             Don't have an account?{' '}
-            <a
-              href="/registration"
+            <Link
+              to="/registration"
               className="text-indigo-600 hover:text-indigo-800 font-medium transition-colors duration-300"
             >
               Register here
-            </a>
+            </Link>
           </p>
         </div>
 
