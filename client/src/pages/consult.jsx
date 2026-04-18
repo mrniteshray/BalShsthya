@@ -196,16 +196,16 @@ const ConsultationPage = () => {
         <div className="flex flex-col gap-2">
            <span className="font-bold">Dr. {data.doctorName} is calling...</span>
            <div className="flex gap-2">
-              <button 
-                 onClick={() => {
-                   console.log("[Video-Debug] Accept clicked for appt:", data.appointmentId);
-                   toast.dismiss(t.id);
-                   acceptLiveCall(data.appointmentId);
-                 }}
-                 className="bg-green-500 text-white px-3 py-1 rounded text-sm font-bold"
-              >
-                  Accept
-              </button>
+               <button 
+                  onClick={() => {
+                    console.log("[Video-Debug] Accept clicked for appt:", data.appointmentId);
+                    toast.dismiss(t.id);
+                    answerCall();
+                  }}
+                  className="bg-green-500 text-white px-3 py-1 rounded text-sm font-bold"
+               >
+                   Accept
+               </button>
               <button 
                  onClick={() => {
                    console.log("[Video-Debug] Decline clicked for appt:", data.appointmentId);
@@ -290,17 +290,25 @@ const ConsultationPage = () => {
   };
 
   /* ---------------- WEBRTC FUNCTIONS ---------------- */
-  const acceptLiveCall = async (appointmentId) => {
+  const answerCall = async () => {
+      // 1. Immediately set states to open UI
+      setReceivingCall(false);
       setCallAccepted(true);
-      setActiveAppointmentId(appointmentId);
       setIsVideoCallOpen(true);
       
-      socket.emit("join-appointment-room", appointmentId);
+      const apptId = activeAppointmentId;
+      if (!apptId) {
+          console.error("[Video-Debug] No active appointment ID to answer.");
+          return;
+      }
+
+      console.log("[Video-Debug] Answering call for appointment:", apptId);
+      socket.emit("join-appointment-room", apptId);
       
-      // 1. Start Camera First
+      // 2. Start Camera and await it
       await startCamera();
       
-      // 2. Create Peer instance
+      // 3. Create Peer instance
       const peer = new Peer({
           initiator: false,
           trickle: false,
@@ -315,35 +323,43 @@ const ConsultationPage = () => {
           }
       });
 
-      // 3. Setup signaling listener for THIS specific peer
+      // 4. Setup signaling listener for THIS specific peer session
+      socket.off("webrtc-signal"); // Clear old
       socket.on("webrtc-signal", (signal) => {
           console.log("[Video-Debug] Received signal for peer:", signal.type || "ice-candidate");
           peer.signal(signal);
       });
 
       peer.on("signal", (data) => {
+          console.log("[Video-Debug] Peer generated answer/signal");
           socket.emit("webrtc-signal", {
-              appointmentId,
+              appointmentId: apptId,
               signal: data
            });
       });
 
       peer.on("stream", (currentStream) => {
-          console.log("[Video-Debug] Received remote stream");
+          console.log("[Video-Debug] Received remote stream successfully");
           if (userVideo.current) {
                userVideo.current.srcObject = currentStream;
           }
       });
+
+      peer.on("error", (err) => {
+          console.error("[Video-Debug] Peer error:", err);
+          toast.error("Video connection error.");
+      });
       
       connectionRef.current = peer;
 
-      // 4. Finally, notify doctor we are ready (this triggers doctor's offer)
-      socket.emit("accept-call", { appointmentId });
+      // 5. Finally, notify doctor we are ready (this triggers doctor's offer)
+      socket.emit("accept-call", { appointmentId: apptId });
   };
 
   const rejectLiveCall = (appointmentId) => {
-      socket.emit("reject-call", { appointmentId });
+      socket.emit("reject-call", { appointmentId: appointmentId || activeAppointmentId });
       setReceivingCall(false);
+      toast.dismiss('incoming-call-toast');
   };
 
   const leaveCall = () => {

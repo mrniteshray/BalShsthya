@@ -168,6 +168,9 @@ const DoctorDashboard = () => {
              setCallAccepted(true);
              toast(`Patient has joined the room. Connecting video...`);
              
+             // Use a stable ID for signaling
+             const apptId = selectedAppt?._id;
+
              // Doctor is caller so initiate peer
              const peer = new Peer({
                  initiator: true,
@@ -184,8 +187,9 @@ const DoctorDashboard = () => {
              });
              
              peer.on("signal", (data) => {
+                 console.log("--- DOCTOR GENERATED OFFER/SIGNAL ---");
                  socket.emit("webrtc-signal", {
-                     appointmentId: selectedAppt?._id,
+                     appointmentId: apptId,
                      signal: data
                  });
              });
@@ -195,6 +199,11 @@ const DoctorDashboard = () => {
                  if (userVideo.current) {
                      userVideo.current.srcObject = currentStream;
                  }
+             });
+
+             peer.on("error", (err) => {
+                 console.error("--- DOCTOR PEER ERROR ---", err);
+                 toast.error("Video connection failed.");
              });
              
              // Setup signal listener specifically for this peer session
@@ -301,6 +310,53 @@ const DoctorDashboard = () => {
         } catch(e) {
             toast.error("Failed to start consultation.");
         }
+    };
+
+    const answerCall = async () => {
+        setReceivingCall(false);
+        setCallAccepted(true);
+        setIsVideoCallOpen(true);
+        
+        const apptId = activeRequest?._id || selectedAppt?._id;
+        if (!apptId) return;
+
+        socket.emit("join-appointment-room", apptId);
+        await startCamera();
+
+        const peer = new Peer({
+            initiator: false,
+            trickle: false,
+            stream: stream || myVideo.current?.srcObject,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:global.stun.twilio.com:3478' }
+                ]
+            }
+        });
+
+        socket.off("webrtc-signal");
+        socket.on("webrtc-signal", (signal) => {
+            peer.signal(signal);
+        });
+
+        peer.on("signal", (data) => {
+            socket.emit("webrtc-signal", {
+                appointmentId: apptId,
+                signal: data
+             });
+        });
+
+        peer.on("stream", (currentStream) => {
+            if (userVideo.current) {
+                 userVideo.current.srcObject = currentStream;
+            }
+        });
+
+        connectionRef.current = peer;
+        socket.emit("accept-call", { appointmentId: apptId });
     };
 
     const leaveCall = async () => {
