@@ -16,6 +16,7 @@ import {
   Video,
   ChevronRight,
   Languages,
+  FileText,
 } from "lucide-react";
 import io from "socket.io-client";
 import Peer from "simple-peer";
