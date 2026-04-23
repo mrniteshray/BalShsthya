@@ -119,9 +119,9 @@ const HomePage = () => {
   const [focusedField, setFocusedField] = useState(null);
   const [activeCard, setActiveCard] = useState(null);
 
-  // Check for upcoming vaccinations
+  // Check for upcoming vaccinations - Updated to use new system
   useEffect(() => {
-    const checkUpcomingVaccinations = async () => {
+    const checkVaccinationReminders = async () => {
       if (!isAuthenticated || !user || user.role === 'doctor') return;
 
       // Small delay to ensure component is fully mounted
@@ -130,53 +130,52 @@ const HomePage = () => {
           const token = localStorage.getItem("token");
           if (!token) return;
 
-          const response = await axios.get(`${CONFIG.BACKEND_URL}/api/vaccinations`, {
+          const response = await axios.get(`${CONFIG.BACKEND_URL}/api/vaccination-reminders`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
-          const completedVaccinations = response.data.completedVaccinations || {};
-          const vaccineBirthDate = response.data.vaccineBirthDate;
+          const reminders = response.data.reminders || [];
 
-          if (!vaccineBirthDate) return;
+          if (reminders.length > 0) {
+            // Find the most urgent reminder
+            const urgentReminder = reminders.find(r => r.overdue > 0 || r.due_today > 0) || reminders[0];
 
-          const birthDate = new Date(vaccineBirthDate);
-          const today = new Date();
-          const daysThreshold = VACCINE_REMINDER_DAYS; // Show popup for vaccines due within 30 days
-
-          let closestVaccine = null;
-          let minDaysDiff = Infinity;
-
-          vaccineSchedule.forEach((vaccine) => {
-            if (completedVaccinations[vaccine.name]) return; // Skip completed vaccines
-
-            const dueDate = addWeeks(birthDate, vaccine.dueAfterWeeks);
-            const daysUntilDue = differenceInDays(dueDate, today);
-
-            // Check if due within threshold and not overdue by too much
-            if (daysUntilDue >= 0 && daysUntilDue <= daysThreshold && daysUntilDue < minDaysDiff) {
-              minDaysDiff = daysUntilDue;
-              closestVaccine = {
-                ...vaccine,
-                dueDate,
-                daysUntilDue,
-                info: vaccineInfo[vaccine.name]
-              };
+            if (urgentReminder) {
+              // Create vaccine popup data from reminder
+              const urgentVaccine = urgentReminder.urgent_vaccines?.[0];
+              if (urgentVaccine) {
+                setUpcomingVaccine({
+                  name: urgentVaccine.name,
+                  dueDate: new Date(urgentVaccine.due_date),
+                  daysUntilDue: urgentVaccine.status === 'due_today' ? 0 :
+                               urgentVaccine.status === 'overdue' ? -1 : 7,
+                  childName: urgentReminder.child.name,
+                  childAge: urgentReminder.child.age_weeks,
+                  isOverdue: urgentVaccine.status === 'overdue',
+                  totalOverdue: urgentReminder.overdue,
+                  totalDueToday: urgentReminder.due_today,
+                  totalDueSoon: urgentReminder.due_soon
+                });
+                setShowVaccinePopup(true);
+              }
             }
-          });
-
-          if (closestVaccine) {
-            setUpcomingVaccine(closestVaccine);
-            setShowVaccinePopup(true);
           }
         } catch (error) {
-          console.error("Error checking vaccinations:", error);
-          // Fallback to localStorage
-          const localCompleted = localStorage.getItem("vaccinations_completed");
-          const localBirthDate = localStorage.getItem("vaccinations_birthDate");
+          console.error("Error checking vaccination reminders:", error);
+          // Keep old fallback logic for backward compatibility
+          try {
+            const token = localStorage.getItem("token");
+            if (!token) return;
+            const response = await axios.get(`${CONFIG.BACKEND_URL}/api/vaccinations`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
 
-          if (localBirthDate && localCompleted) {
-            const completedVaccinations = JSON.parse(localCompleted);
-            const birthDate = new Date(localBirthDate);
+            const completedVaccinations = response.data.completedVaccinations || {};
+            const vaccineBirthDate = response.data.vaccineBirthDate;
+
+            if (!vaccineBirthDate) return;
+
+            const birthDate = new Date(vaccineBirthDate);
             const today = new Date();
             const daysThreshold = VACCINE_REMINDER_DAYS;
 
@@ -204,12 +203,14 @@ const HomePage = () => {
               setUpcomingVaccine(closestVaccine);
               setShowVaccinePopup(true);
             }
+          } catch (fallbackError) {
+            console.error("Fallback vaccination check failed:", fallbackError);
           }
         }
-      }, 500); // 500ms delay to ensure component is fully mounted
+      }, 500);
     };
 
-    checkUpcomingVaccinations();
+    checkVaccinationReminders();
   }, [isAuthenticated, user]);
 
   // --- Observation Logic ---
@@ -421,46 +422,75 @@ const HomePage = () => {
             </button>
 
             <div className="text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle className="w-8 h-8 text-red-500" />
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                upcomingVaccine.isOverdue ? 'bg-red-100' : 'bg-blue-100'
+              }`}>
+                <AlertTriangle className={`w-8 h-8 ${
+                  upcomingVaccine.isOverdue ? 'text-red-500' : 'text-blue-500'
+                }`} />
               </div>
 
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Vaccine Reminder</h2>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                {upcomingVaccine.isOverdue ? 'Overdue Vaccination Alert' : 'Vaccine Reminder'}
+              </h2>
               <p className="text-gray-600 mb-4">
-                Your child needs the following vaccination soon!
+                {upcomingVaccine.childName} ({upcomingVaccine.childAge} weeks old)
               </p>
 
-              <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                <h3 className="font-semibold text-lg text-blue-800 mb-2">
+              <div className={`rounded-lg p-4 mb-4 ${
+                upcomingVaccine.isOverdue ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'
+              }`}>
+                <h3 className="font-semibold text-lg mb-2" style={{
+                  color: upcomingVaccine.isOverdue ? '#dc2626' : '#2563eb'
+                }}>
                   {upcomingVaccine.name}
                 </h3>
-                <p className="text-blue-700 mb-2">
+                <p className="mb-2" style={{
+                  color: upcomingVaccine.isOverdue ? '#dc2626' : '#2563eb'
+                }}>
                   Due Date: {format(upcomingVaccine.dueDate, "dd MMM yyyy")}
                 </p>
-                <p className="text-sm text-blue-600">
+                <p className="text-sm mb-2">
                   {upcomingVaccine.daysUntilDue === 0
                     ? "Due today!"
-                    : `Due in ${upcomingVaccine.daysUntilDue} day${upcomingVaccine.daysUntilDue !== 1 ? 's' : ''}`}
+                    : upcomingVaccine.daysUntilDue === -1
+                    ? "Overdue!"
+                    : `Due in ${upcomingVaccine.daysUntilDue} days`}
                 </p>
+
+                {/* Show summary of other alerts */}
+                {(upcomingVaccine.totalOverdue > 0 || upcomingVaccine.totalDueToday > 0 || upcomingVaccine.totalDueSoon > 0) && (
+                  <div className="text-xs mt-2 pt-2 border-t border-gray-300">
+                    {upcomingVaccine.totalOverdue > 0 && (
+                      <span className="text-red-600 font-medium">
+                        {upcomingVaccine.totalOverdue} overdue
+                      </span>
+                    )}
+                    {upcomingVaccine.totalDueToday > 0 && (
+                      <span className={`font-medium ${upcomingVaccine.totalOverdue > 0 ? 'ml-2' : ''}`}>
+                        {upcomingVaccine.totalDueToday} due today
+                      </span>
+                    )}
+                    {upcomingVaccine.totalDueSoon > 0 && (
+                      <span className="text-orange-600 font-medium ml-2">
+                        {upcomingVaccine.totalDueSoon} due soon
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <p className="text-sm text-gray-600 mb-6">
-                {upcomingVaccine.info}
-              </p>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowVaccinePopup(false);
-                    navigate('/vaccine-reminder');
-                  }}
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+              <div className="flex gap-3 justify-center">
+                <Link
+                  to="/vaccine-reminder"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                  onClick={() => setShowVaccinePopup(false)}
                 >
                   View All Vaccines
-                </button>
+                </Link>
                 <button
                   onClick={() => setShowVaccinePopup(false)}
-                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors"
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg font-medium transition-colors"
                 >
                   Remind Later
                 </button>

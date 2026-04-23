@@ -122,6 +122,21 @@ import { getVaccinations, updateVaccinations } from '../controller/user/vaccinat
 router.get('/vaccinations', authtoken, getVaccinations);
 router.put('/vaccinations', authtoken, updateVaccinations);
 
+// New Vaccination System Routes
+import {
+    createChild,
+    getChildren,
+    getChildVaccinations,
+    completeVaccination,
+    getVaccinationReminders
+} from '../controller/user/vaccinationController.js';
+
+router.post('/children', authtoken, createChild);
+router.get('/children', authtoken, getChildren);
+router.get('/children/:childId/vaccinations', authtoken, getChildVaccinations);
+router.put('/vaccinations/:vaccinationId/complete', authtoken, completeVaccination);
+router.get('/vaccination-reminders', authtoken, getVaccinationReminders);
+
 // News Route
 import { getNews } from '../controllers/newsController.js';
 router.get('/news', getNews);
