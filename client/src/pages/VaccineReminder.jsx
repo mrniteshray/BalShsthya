@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { format, addWeeks, differenceInWeeks, differenceInDays } from "date-fns";
 import axios from "axios";
 import CONFIG from "../config.js";
@@ -12,22 +13,10 @@ const VaccineReminder = () => {
     overdue: [],
     completed: []
   });
-  const [showChildForm, setShowChildForm] = useState(false);
   const [showMoreVaccines, setShowMoreVaccines] = useState(false);
   const [selectedVaccine, setSelectedVaccine] = useState(null);
   const [loading, setLoading] = useState(true);
   const [reminders, setReminders] = useState([]);
-
-  // Child registration form state
-  const [childForm, setChildForm] = useState({
-    child_name: '',
-    dob: '',
-    gender: '',
-    weight: '',
-    height: '',
-    blood_group: '',
-    medical_conditions: ''
-  });
 
   useEffect(() => {
     fetchChildren();
@@ -79,32 +68,6 @@ const VaccineReminder = () => {
   const handleChildSelect = (child) => {
     setSelectedChild(child);
     fetchChildVaccinations(child._id);
-  };
-
-  const handleCreateChild = async (e) => {
-    e.preventDefault();
-    try {
-      const token = localStorage.getItem("token");
-      await axios.post(`${CONFIG.BACKEND_URL}/api/children`, childForm, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      setChildForm({
-        child_name: '',
-        dob: '',
-        gender: '',
-        weight: '',
-        height: '',
-        blood_group: '',
-        medical_conditions: ''
-      });
-      setShowChildForm(false);
-      fetchChildren();
-      fetchReminders();
-    } catch (error) {
-      console.error("Error creating child:", error);
-      alert("Error creating child profile");
-    }
   };
 
   const handleCompleteVaccination = async (vaccinationId) => {
@@ -206,17 +169,15 @@ const VaccineReminder = () => {
         <div className="child-list">
           <div className="child-list-header">
             <h2>Your Children</h2>
-            <button
-              className="add-child-btn"
-              onClick={() => setShowChildForm(true)}
-            >
-              ➕ Add Child
-            </button>
+            <Link to="/profile" className="add-child-btn">
+              📝 Manage Child Profile
+            </Link>
           </div>
           {children.length === 0 && (
             <div className="empty-state">
               <p>No child profiles added yet.</p>
-              <p>Start by adding a child to see vaccination reminders, due dates, and progress at a glance.</p>
+              <p>Please fill in the child profile on the Profile page to view vaccination schedules here.</p>
+              <Link to="/profile" className="profile-link-btn">Go to Profile</Link>
             </div>
           )}
           {children.map((child) => (
@@ -225,111 +186,13 @@ const VaccineReminder = () => {
               className={`child-card ${selectedChild?._id === child._id ? 'active' : ''}`}
               onClick={() => handleChildSelect(child)}
             >
-              <h3>{child.child_name}</h3>
-              <p>DOB: {format(new Date(child.dob), 'dd MMM yyyy')}</p>
-              <p>Age: {Math.floor(differenceInWeeks(new Date(), new Date(child.dob)))} weeks</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Child Registration Form */}
-      {showChildForm && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2>Register New Child</h2>
-            <form onSubmit={handleCreateChild}>
-              <div className="form-group">
-                <label>Child Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={childForm.child_name}
-                  onChange={(e) => setChildForm({...childForm, child_name: e.target.value})}
-                />
+                <h3>{child.child_name}</h3>
+                <p>DOB: {format(new Date(child.dob), 'dd MMM yyyy')}</p>
+                <p>Age: {Math.floor(differenceInWeeks(new Date(), new Date(child.dob)))} weeks</p>
               </div>
-
-              <div className="form-group">
-                <label>Date of Birth *</label>
-                <input
-                  type="date"
-                  required
-                  value={childForm.dob}
-                  onChange={(e) => setChildForm({...childForm, dob: e.target.value})}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Gender *</label>
-                <select
-                  required
-                  value={childForm.gender}
-                  onChange={(e) => setChildForm({...childForm, gender: e.target.value})}
-                >
-                  <option value="">Select Gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Weight (kg)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={childForm.weight}
-                    onChange={(e) => setChildForm({...childForm, weight: e.target.value})}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Height (cm)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={childForm.height}
-                    onChange={(e) => setChildForm({...childForm, height: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Blood Group</label>
-                <select
-                  value={childForm.blood_group}
-                  onChange={(e) => setChildForm({...childForm, blood_group: e.target.value})}
-                >
-                  <option value="">Select Blood Group</option>
-                  <option value="A+">A+</option>
-                  <option value="A-">A-</option>
-                  <option value="B+">B+</option>
-                  <option value="B-">B-</option>
-                  <option value="AB+">AB+</option>
-                  <option value="AB-">AB-</option>
-                  <option value="O+">O+</option>
-                  <option value="O-">O-</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Medical Conditions</label>
-                <textarea
-                  value={childForm.medical_conditions}
-                  onChange={(e) => setChildForm({...childForm, medical_conditions: e.target.value})}
-                  placeholder="Any allergies or medical conditions..."
-                />
-              </div>
-
-              <div className="form-actions">
-                <button type="submit">Register Child</button>
-                <button type="button" onClick={() => setShowChildForm(false)}>Cancel</button>
-              </div>
-            </form>
+            ))}
           </div>
         </div>
-      )}
 
       {/* Vaccination Dashboard */}
       {selectedChild && (
@@ -804,6 +667,23 @@ const VaccineReminder = () => {
 
         .add-child-btn:hover {
           transform: scale(1.05);
+        }
+
+        .profile-link-btn {
+          display: inline-flex;
+          margin-top: 14px;
+          padding: 12px 18px;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.15);
+          color: white;
+          font-weight: 700;
+          text-decoration: none;
+          transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .profile-link-btn:hover {
+          background: rgba(255, 255, 255, 0.25);
+          transform: translateY(-1px);
         }
 
         .vaccination-dashboard {
