@@ -150,7 +150,7 @@ const BalSathyaTracker = () => {
     };
   };
 
-  // Check Health Concerns
+  // Check Health Concerns & Suggestions
   const getHealthConcerns = () => {
     const summary = getMonthlySummary();
     if (!summary) return [];
@@ -158,36 +158,64 @@ const BalSathyaTracker = () => {
     const concerns = [];
     const bmi = parseFloat(summary.latestBMI);
     
+    // Weight to Height Ratio (BMI)
     if (bmi < 13) {
       concerns.push({
         type: 'warning',
         icon: '⚠️',
-        title: 'Underweight Alert',
-        message: `BMI is ${bmi}, which is below healthy range. Consider consulting your pediatrician about nutrition.`
+        title: 'Weight is low according to height',
+        message: `Your child's BMI is ${bmi}, which indicates they are underweight for their height. Focus on nutritious, calorie-dense foods and consider consulting a pediatrician.`
       });
-    }
-    if (bmi > 19) {
+    } else if (bmi > 19) {
       concerns.push({
         type: 'warning',
         icon: '⚠️',
-        title: 'Overweight Alert',
-        message: `BMI is ${bmi}, which is above healthy range. Encourage more physical activity and balanced diet.`
+        title: 'Weight is high according to height',
+        message: `Your child's BMI is ${bmi}, indicating they are slightly overweight. Encourage more active play and a balanced diet with lots of vegetables.`
+      });
+    } else {
+      concerns.push({
+        type: 'success',
+        icon: '✅',
+        title: 'Healthy Weight-to-Height Ratio',
+        message: `Great job! Your child's BMI is ${bmi}, which is in the perfectly healthy zone. Keep up the good work!`
       });
     }
+
+    // Height Progress
     if (summary.heightChange < 0) {
       concerns.push({
         type: 'info',
         icon: 'ℹ️',
-        title: 'Height Measurement Note',
-        message: `Height decreased by ${Math.abs(summary.heightChange)}cm. Please recheck measurement accuracy.`
+        title: 'Measurement Discrepancy',
+        message: `Height seems to have decreased by ${Math.abs(summary.heightChange)}cm. Please recheck the latest measurement for accuracy.`
+      });
+    } else if (summary.heightChange > 0) {
+       concerns.push({
+        type: 'success',
+        icon: '🌱',
+        title: 'Steady Growth',
+        message: `Your child grew by ${summary.heightChange}cm this month. Excellent progress!`
       });
     }
+
+    // Milestones
+    const recentMilestones = growthLogs.filter(log => log.milestone && log.milestone.trim() !== '' && new Date(log.date).getMonth() === new Date().getMonth());
+    if (recentMilestones.length > 0) {
+        concerns.push({
+        type: 'success',
+        icon: '🎉',
+        title: 'Great Milestones Achieved!',
+        message: `Your child achieved new milestones this month: ${recentMilestones.map(m => m.milestone).join(', ')}. Celebrate these wonderful moments!`
+      });
+    }
+
     if (summary.avgWater < 2 && parseFloat(summary.avgWater) > 0) {
       concerns.push({
         type: 'info',
         icon: '💧',
         title: 'Hydration Reminder',
-        message: `Average water intake is ${summary.avgWater} glasses. Ensure adequate hydration for your child.`
+        message: `Average water intake is only ${summary.avgWater} glasses. Try to encourage more sips of water throughout the day.`
       });
     }
     
@@ -212,6 +240,30 @@ const BalSathyaTracker = () => {
     };
     html2pdf().set(opt).from(element).save();
     toast.success('PDF downloaded successfully!');
+  };
+
+  const downloadDetailedPDF = () => {
+    if (growthLogs.length === 0) {
+      toast.error('No data available to generate report');
+      return;
+    }
+
+    const element = document.getElementById('detailed-pdf-content');
+    element.style.display = 'block';
+
+    const opt = {
+      margin: 10,
+      filename: `${user.kidName || 'Baby'}_Complete_Growth_Report_${format(new Date(), 'MMM_yyyy')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
+      pagebreak: { mode: 'css', before: '#page-break-history' }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+      element.style.display = 'none';
+      toast.success('Detailed PDF downloaded successfully!');
+    });
   };
 
   const calculateAge = () => {
@@ -606,13 +658,14 @@ const BalSathyaTracker = () => {
               <span className="p-2 bg-white/50 dark:bg-slate-800/50 rounded-xl shadow-sm backdrop-blur-sm border border-white/60 dark:border-slate-700/60">📊</span> This Month's Summary & Analysis
             </h2>
 
-            {/* Summary Table */}
+            {/* PDF Content Container */}
             <div id="pdf-content" className="backdrop-blur-2xl bg-white/50 dark:bg-slate-800/50 rounded-3xl shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-white/80 dark:border-slate-700/80 overflow-hidden p-6 mb-6">
+              {/* Summary Table */}
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
                 <span className="text-2xl">📈</span> {format(new Date(), 'MMMM yyyy')} Growth Metrics
               </h3>
               
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto mb-8">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm">
@@ -659,49 +712,57 @@ const BalSathyaTracker = () => {
                 </table>
               </div>
 
-              {/* Download PDF Button */}
-              <div className="mt-6 flex justify-center">
-                <button
-                  onClick={downloadPDF}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                >
-                  <FiDownload className="text-xl" /> Download Growth Tracker PDF
-                </button>
-              </div>
-            </div>
-
-            {/* Health Alerts */}
-            {getHealthConcerns().length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-                  <span className="text-2xl">⚠️</span> Health Observations & Recommendations
-                </h3>
-                <div className="space-y-3">
-                  {getHealthConcerns().map((concern, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`p-4 rounded-lg border-l-4 backdrop-blur-sm ${
-                        concern.type === 'warning' 
-                          ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500' 
-                          : 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl mt-1">{concern.icon}</span>
-                        <div>
-                          <h4 className={`font-bold ${concern.type === 'warning' ? 'text-orange-800 dark:text-orange-200' : 'text-blue-800 dark:text-blue-200'}`}>
-                            {concern.title}
-                          </h4>
-                          <p className={concern.type === 'warning' ? 'text-orange-700 dark:text-orange-300' : 'text-blue-700 dark:text-blue-300'}>
-                            {concern.message}
-                          </p>
+              {/* Health Alerts Inside PDF Content */}
+              {getHealthConcerns().length > 0 && (
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <span className="text-2xl">⚠️</span> Health Observations & Recommendations
+                  </h3>
+                  <div className="space-y-3">
+                    {getHealthConcerns().map((concern, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`p-4 rounded-lg border-l-4 backdrop-blur-sm ${
+                          concern.type === 'warning' 
+                            ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500' 
+                            : concern.type === 'success'
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
+                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl mt-1">{concern.icon}</span>
+                          <div>
+                            <h4 className={`font-bold ${concern.type === 'warning' ? 'text-orange-800 dark:text-orange-200' : concern.type === 'success' ? 'text-green-800 dark:text-green-200' : 'text-blue-800 dark:text-blue-200'}`}>
+                              {concern.title}
+                            </h4>
+                            <p className={concern.type === 'warning' ? 'text-orange-700 dark:text-orange-300' : concern.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-blue-700 dark:text-blue-300'}>
+                              {concern.message}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+
+            {/* Download PDF Buttons Outside PDF Content */}
+            <div className="flex flex-col sm:flex-row justify-center gap-4 mb-6">
+              <button
+                onClick={downloadPDF}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+              >
+                <FiDownload className="text-xl" /> Download Current Month PDF
+              </button>
+              <button
+                onClick={downloadDetailedPDF}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+              >
+                <FiDownload className="text-xl" /> Download Detailed Report (All History)
+              </button>
+            </div>
           </div>
         )}
 
@@ -794,6 +855,97 @@ const BalSathyaTracker = () => {
             </button>
           </div>
         )}
+
+        {/* HIDDEN DETAILED PDF TEMPLATE */}
+        <div id="detailed-pdf-content" style={{ display: 'none', padding: '20px', color: '#1e293b', backgroundColor: 'white' }}>
+          {/* Cover / Header */}
+          <div style={{ textAlign: 'center', borderBottom: '2px solid #e2e8f0', paddingBottom: '20px', marginBottom: '20px' }}>
+            <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#7e22ce', margin: '0 0 10px 0' }}>{user.kidName || 'Baby'}&apos;s Complete Growth Report</h1>
+            <p style={{ fontSize: '16px', color: '#475569', margin: '5px 0' }}>Generated on: {format(new Date(), 'MMMM dd, yyyy')}</p>
+            <p style={{ fontSize: '16px', color: '#475569', margin: '5px 0' }}>Age: {calculateAge()} | Gender: {user.gender || 'Unknown'}</p>
+          </div>
+
+          {/* Section 1: Latest Insights & Analysis */}
+          <div style={{ marginBottom: '30px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#be185d', marginBottom: '10px', borderBottom: '1px solid #fbcfe8', paddingBottom: '5px' }}>Current Health Insights & Suggestions</h2>
+            
+            <div style={{ marginBottom: '15px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#4c1d95', margin: '0 0 5px 0' }}>AI Analysis:</h3>
+              <p style={{ fontSize: '14px', lineHeight: '1.5', margin: '0' }}>{aiStats?.explanation || "Data is being collected successfully."}</p>
+              <p style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '5px', color: '#334155' }}>Status: {aiStats?.status || "Normal"}</p>
+            </div>
+
+            {getHealthConcerns().length > 0 && (
+              <div style={{ marginBottom: '15px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#b45309', margin: '0 0 5px 0' }}>Areas Needing Attention / Observations:</h3>
+                <ul style={{ paddingLeft: '20px', margin: '10px 0', fontSize: '14px', lineHeight: '1.5' }}>
+                  {getHealthConcerns().map((c, i) => (
+                    <li key={i} style={{ marginBottom: '8px' }}>
+                      <strong>{c.title}:</strong> {c.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {nutritionAdvice && (
+              <div style={{ marginBottom: '15px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#047857', margin: '0 0 5px 0' }}>Nutrition Advice:</h3>
+                <p style={{ fontSize: '14px', lineHeight: '1.5', margin: '0' }}><strong>{nutritionAdvice.title}:</strong> {nutritionAdvice.text}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: Milestones */}
+          {growthLogs.filter(log => log.milestone?.trim()).length > 0 && (
+            <div style={{ marginBottom: '30px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#be185d', marginBottom: '10px', borderBottom: '1px solid #fbcfe8', paddingBottom: '5px' }}>Developmental Milestones Achieved</h2>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f3f4f6' }}>
+                    <th style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'left', width: '30%', color: '#334155' }}>Date</th>
+                    <th style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'left', color: '#334155' }}>Milestone</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {growthLogs.filter(log => log.milestone?.trim()).map(log => (
+                    <tr key={log._id}>
+                      <td style={{ padding: '8px', border: '1px solid #e2e8f0', color: '#475569' }}>{format(new Date(log.date), 'MMM dd, yyyy')}</td>
+                      <td style={{ padding: '8px', border: '1px solid #e2e8f0', color: '#475569' }}>{log.milestone}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Section 3: All Historical Data */}
+          <div id="page-break-history" style={{ pageBreakBefore: 'always', marginTop: '20px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#be185d', marginBottom: '10px', borderBottom: '1px solid #fbcfe8', paddingBottom: '5px' }}>Complete Growth History</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f3f4f6' }}>
+                  <th style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'left', color: '#334155' }}>Date</th>
+                  <th style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'left', color: '#334155' }}>Height (cm)</th>
+                  <th style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'left', color: '#334155' }}>Weight (kg)</th>
+                  <th style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'left', color: '#334155' }}>BMI</th>
+                  <th style={{ padding: '8px', border: '1px solid #e2e8f0', textAlign: 'left', color: '#334155' }}>Water Intake</th>
+                </tr>
+              </thead>
+              <tbody>
+                {growthLogs.map(log => (
+                  <tr key={log._id}>
+                    <td style={{ padding: '8px', border: '1px solid #e2e8f0', color: '#475569' }}>{format(new Date(log.date), 'MMM dd, yyyy')}</td>
+                    <td style={{ padding: '8px', border: '1px solid #e2e8f0', color: '#475569' }}>{log.height_cm}</td>
+                    <td style={{ padding: '8px', border: '1px solid #e2e8f0', color: '#475569' }}>{log.weight_kg}</td>
+                    <td style={{ padding: '8px', border: '1px solid #e2e8f0', color: '#475569' }}>{log.bmi ? log.bmi.toFixed(1) : (log.weight_kg / Math.pow(log.height_cm / 100, 2)).toFixed(1)}</td>
+                    <td style={{ padding: '8px', border: '1px solid #e2e8f0', color: '#475569' }}>{log.waterIntake_ml ? `${log.waterIntake_ml} glasses` : '--'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
       </div>
     </div>
