@@ -18,7 +18,8 @@ import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import growthTrackerAPI from '../api/growthTrackerAPI.jsx';
 
-import { FiAlertCircle, FiTrash2, FiInfo, FiHeart, FiSmile } from 'react-icons/fi';
+import { FiAlertCircle, FiTrash2, FiInfo, FiHeart, FiSmile, FiDownload } from 'react-icons/fi';
+import html2pdf from 'html2pdf.js';
 
 ChartJS.register(
   CategoryScale,
@@ -119,6 +120,98 @@ const BalSathyaTracker = () => {
     } catch {
       toast.error("Failed to reset tracker");
     }
+  };
+
+  // Calculate Monthly Summary
+  const getMonthlySummary = () => {
+    if (growthLogs.length === 0) return null;
+    const sortedLogs = [...growthLogs].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const currentMonthLogs = sortedLogs.filter(log => {
+      const logMonth = new Date(log.date);
+      const today = new Date();
+      return logMonth.getMonth() === today.getMonth() && logMonth.getFullYear() === today.getFullYear();
+    });
+    
+    if (currentMonthLogs.length === 0) return null;
+    
+    const latest = currentMonthLogs[0];
+    const oldest = currentMonthLogs[currentMonthLogs.length - 1];
+    
+    return {
+      entries: currentMonthLogs.length,
+      latestHeight: latest.height_cm,
+      latestWeight: latest.weight_kg,
+      latestBMI: (latest.weight_kg / Math.pow(latest.height_cm / 100, 2)).toFixed(1),
+      previousHeight: oldest.height_cm,
+      previousWeight: oldest.weight_kg,
+      heightChange: (latest.height_cm - oldest.height_cm).toFixed(2),
+      weightChange: (latest.weight_kg - oldest.weight_kg).toFixed(2),
+      avgWater: (currentMonthLogs.reduce((sum, log) => sum + (log.waterIntake_ml || 0), 0) / currentMonthLogs.length).toFixed(1)
+    };
+  };
+
+  // Check Health Concerns
+  const getHealthConcerns = () => {
+    const summary = getMonthlySummary();
+    if (!summary) return [];
+    
+    const concerns = [];
+    const bmi = parseFloat(summary.latestBMI);
+    
+    if (bmi < 13) {
+      concerns.push({
+        type: 'warning',
+        icon: '⚠️',
+        title: 'Underweight Alert',
+        message: `BMI is ${bmi}, which is below healthy range. Consider consulting your pediatrician about nutrition.`
+      });
+    }
+    if (bmi > 19) {
+      concerns.push({
+        type: 'warning',
+        icon: '⚠️',
+        title: 'Overweight Alert',
+        message: `BMI is ${bmi}, which is above healthy range. Encourage more physical activity and balanced diet.`
+      });
+    }
+    if (summary.heightChange < 0) {
+      concerns.push({
+        type: 'info',
+        icon: 'ℹ️',
+        title: 'Height Measurement Note',
+        message: `Height decreased by ${Math.abs(summary.heightChange)}cm. Please recheck measurement accuracy.`
+      });
+    }
+    if (summary.avgWater < 2 && parseFloat(summary.avgWater) > 0) {
+      concerns.push({
+        type: 'info',
+        icon: '💧',
+        title: 'Hydration Reminder',
+        message: `Average water intake is ${summary.avgWater} glasses. Ensure adequate hydration for your child.`
+      });
+    }
+    
+    return concerns;
+  };
+
+  // Download PDF
+  const downloadPDF = () => {
+    const summary = getMonthlySummary();
+    if (!summary) {
+      toast.error('No data available for this month');
+      return;
+    }
+
+    const element = document.getElementById('pdf-content');
+    const opt = {
+      margin: 10,
+      filename: `${user.kidName || 'Baby'}_GrowthTracker_${format(new Date(), 'MMM_yyyy')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+    };
+    html2pdf().set(opt).from(element).save();
+    toast.success('PDF downloaded successfully!');
   };
 
   const calculateAge = () => {
@@ -303,8 +396,16 @@ const BalSathyaTracker = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 relative z-10">
 
-        {/* Header Block */}
-        <div className="text-center mb-10">
+        {/* DOCTOR PRESCRIPTION WARNING BANNER */}
+        <div className="mb-8 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-l-4 border-blue-500 rounded-lg p-4 flex items-start gap-4 backdrop-blur-sm">
+          <div className="text-3xl mt-1">📋</div>
+          <div>
+            <h3 className="font-bold text-blue-900 dark:text-blue-200 text-lg">Important: Doctor&apos;s Prescription Data</h3>
+            <p className="text-blue-800 dark:text-blue-300 text-sm mt-1">Please enter growth data from the latest prescription given by your doctor to reduce human errors. This ensures accurate tracking and better health monitoring for your child.</p>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-8 mb-12 relative z-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 text-white font-bold text-3xl shadow-lg mb-4">
             {user.kidName ? user.kidName.charAt(0).toUpperCase() : '👶'}
           </div>
@@ -495,6 +596,112 @@ const BalSathyaTracker = () => {
               </div>
 
             </div>
+          </div>
+        )}
+
+        {/* MONTHLY SUMMARY & ALERTS SECTION */}
+        {getMonthlySummary() && (
+          <div className="mb-12 relative z-10">
+            <h2 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mb-6 border-b border-slate-200 dark:border-slate-700/50 pb-2 flex items-center gap-2">
+              <span className="p-2 bg-white/50 dark:bg-slate-800/50 rounded-xl shadow-sm backdrop-blur-sm border border-white/60 dark:border-slate-700/60">📊</span> This Month's Summary & Analysis
+            </h2>
+
+            {/* Summary Table */}
+            <div id="pdf-content" className="backdrop-blur-2xl bg-white/50 dark:bg-slate-800/50 rounded-3xl shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-white/80 dark:border-slate-700/80 overflow-hidden p-6 mb-6">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                <span className="text-2xl">📈</span> {format(new Date(), 'MMMM yyyy')} Growth Metrics
+              </h3>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm">
+                      <th className="p-4">Metric</th>
+                      <th className="p-4">Latest</th>
+                      <th className="p-4">Previous</th>
+                      <th className="p-4">Change</th>
+                      <th className="p-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200/50">
+                    <tr className="hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+                      <td className="p-4 font-bold text-slate-700 dark:text-slate-200">Height (cm)</td>
+                      <td className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded text-purple-700 dark:text-purple-300 font-bold">{getMonthlySummary().latestHeight}</td>
+                      <td className="p-4 text-slate-600 dark:text-slate-300">{getMonthlySummary().previousHeight}</td>
+                      <td className="p-4 text-slate-700 dark:text-slate-200"><span className={`font-bold ${getMonthlySummary().heightChange > 0 ? 'text-green-600' : 'text-red-600'}`}>+{getMonthlySummary().heightChange}</span></td>
+                      <td className="p-4"><span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold">Good</span></td>
+                    </tr>
+                    <tr className="hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+                      <td className="p-4 font-bold text-slate-700 dark:text-slate-200">Weight (kg)</td>
+                      <td className="p-4 bg-pink-50 dark:bg-pink-900/20 rounded text-pink-700 dark:text-pink-300 font-bold">{getMonthlySummary().latestWeight}</td>
+                      <td className="p-4 text-slate-600 dark:text-slate-300">{getMonthlySummary().previousWeight}</td>
+                      <td className="p-4 text-slate-700 dark:text-slate-200"><span className={`font-bold ${getMonthlySummary().weightChange > 0 ? 'text-green-600' : 'text-red-600'}`}>+{getMonthlySummary().weightChange}</span></td>
+                      <td className="p-4"><span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold">Healthy</span></td>
+                    </tr>\n                    <tr className="hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+                      <td className="p-4 font-bold text-slate-700 dark:text-slate-200">BMI</td>
+                      <td className="p-4 bg-violet-50 dark:bg-violet-900/20 rounded text-violet-700 dark:text-violet-300 font-bold">{getMonthlySummary().latestBMI}</td>
+                      <td className="p-4 text-slate-600 dark:text-slate-300">--</td>
+                      <td className="p-4 text-slate-700 dark:text-slate-200">--</td>
+                      <td className="p-4"><span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold">Normal</span></td>
+                    </tr>
+                    <tr className="hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+                      <td className="p-4 font-bold text-slate-700 dark:text-slate-200">Avg Water (Glasses)</td>
+                      <td className="p-4 bg-sky-50 dark:bg-sky-900/20 rounded text-sky-700 dark:text-sky-300 font-bold">{getMonthlySummary().avgWater}</td>
+                      <td className="p-4 text-slate-600 dark:text-slate-300">--</td>
+                      <td className="p-4 text-slate-700 dark:text-slate-200">--</td>
+                      <td className="p-4"><span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">Tracking</span></td>
+                    </tr>
+                    <tr className="hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+                      <td className="p-4 font-bold text-slate-700 dark:text-slate-200">Total Entries</td>
+                      <td colSpan="4" className="p-4 text-slate-700 dark:text-slate-200"><span className="font-bold text-lg">{getMonthlySummary().entries} records this month</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Download PDF Button */}
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={downloadPDF}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                >
+                  <FiDownload className="text-xl" /> Download Growth Tracker PDF
+                </button>
+              </div>
+            </div>
+
+            {/* Health Alerts */}
+            {getHealthConcerns().length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                  <span className="text-2xl">⚠️</span> Health Observations & Recommendations
+                </h3>
+                <div className="space-y-3">
+                  {getHealthConcerns().map((concern, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`p-4 rounded-lg border-l-4 backdrop-blur-sm ${
+                        concern.type === 'warning' 
+                          ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500' 
+                          : 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl mt-1">{concern.icon}</span>
+                        <div>
+                          <h4 className={`font-bold ${concern.type === 'warning' ? 'text-orange-800 dark:text-orange-200' : 'text-blue-800 dark:text-blue-200'}`}>
+                            {concern.title}
+                          </h4>
+                          <p className={concern.type === 'warning' ? 'text-orange-700 dark:text-orange-300' : 'text-blue-700 dark:text-blue-300'}>
+                            {concern.message}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -157,8 +157,19 @@ const VaccineReminder = () => {
   return (
     <div className="vaccine-container">
       <div className="header-section">
-        <h1 className="title">🍼 Child Vaccination Tracker</h1>
-        <p className="subtitle">Track your child's vaccination schedule and never miss an important dose</p>
+        <div className="hero-copy">
+          <h1 className="title">🍼 Child Vaccination Tracker</h1>
+          <p className="subtitle">Track your child's vaccination schedule and never miss an important dose.</p>
+        </div>
+        <div className="hero-card">
+          <h2>Stay ahead of every dose</h2>
+          <p>Personalized reminders, progress tracking, and a safe place for your child's vaccine records.</p>
+          <div className="hero-features">
+            <span>✅ Personalized timeline</span>
+            <span>📌 Due date alerts</span>
+            <span>📊 Progress tracker</span>
+          </div>
+        </div>
       </div>
 
       {/* Dashboard Reminders */}
@@ -193,7 +204,21 @@ const VaccineReminder = () => {
       {/* Child Selection */}
       <div className="child-selection">
         <div className="child-list">
-          <h2>Your Children</h2>
+          <div className="child-list-header">
+            <h2>Your Children</h2>
+            <button
+              className="add-child-btn"
+              onClick={() => setShowChildForm(true)}
+            >
+              ➕ Add Child
+            </button>
+          </div>
+          {children.length === 0 && (
+            <div className="empty-state">
+              <p>No child profiles added yet.</p>
+              <p>Start by adding a child to see vaccination reminders, due dates, and progress at a glance.</p>
+            </div>
+          )}
           {children.map((child) => (
             <div
               key={child._id}
@@ -205,12 +230,6 @@ const VaccineReminder = () => {
               <p>Age: {Math.floor(differenceInWeeks(new Date(), new Date(child.dob)))} weeks</p>
             </div>
           ))}
-          <button
-            className="add-child-btn"
-            onClick={() => setShowChildForm(true)}
-          >
-            ➕ Add Child
-          </button>
         </div>
       </div>
 
@@ -555,14 +574,29 @@ const VaccineReminder = () => {
         }
 
         .header-section {
-          text-align: center;
+          display: grid;
+          grid-template-columns: 1fr 0.9fr;
+          gap: 24px;
+          align-items: center;
           margin-bottom: 30px;
+          padding: 28px;
+          background: rgba(255, 255, 255, 0.08);
+          border-radius: 24px;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          box-shadow: 0 30px 60px rgba(0, 0, 0, 0.18);
+        }
+
+        .hero-copy {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
         }
 
         .title {
-          font-size: 2.5rem;
-          margin-bottom: 10px;
-          background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #38bdf8 100%);
+          font-size: 2.8rem;
+          margin-bottom: 0;
+          line-height: 1.05;
+          background: linear-gradient(135deg, #818cf8 0%, #c084fc 45%, #38bdf8 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
@@ -570,8 +604,52 @@ const VaccineReminder = () => {
 
         .subtitle {
           font-size: 1.1rem;
-          opacity: 0.85;
+          opacity: 0.9;
           color: #cbd5e1;
+          max-width: 580px;
+        }
+
+        .hero-card {
+          padding: 24px;
+          border-radius: 22px;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          background: rgba(255, 255, 255, 0.05);
+          box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+          min-height: 220px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        }
+
+        .hero-card h2 {
+          margin: 0 0 12px;
+          font-size: 1.5rem;
+          color: #f8fafc;
+        }
+
+        .hero-card p {
+          margin: 0;
+          color: #dbeafe;
+          line-height: 1.7;
+        }
+
+        .hero-features {
+          display: grid;
+          grid-template-columns: repeat(1, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 18px;
+        }
+
+        .hero-features span {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 14px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: #e2e8f0;
+          font-size: 0.95rem;
         }
 
         .reminders-section {
@@ -592,6 +670,7 @@ const VaccineReminder = () => {
 
         .reminder-stats {
           display: flex;
+          flex-wrap: wrap;
           gap: 15px;
           margin: 10px 0;
         }
@@ -612,9 +691,30 @@ const VaccineReminder = () => {
 
         .child-list {
           display: flex;
-          flex-wrap: wrap;
-          gap: 15px;
+          flex-direction: column;
+          gap: 18px;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 20px;
+          padding: 22px;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+        }
+
+        .child-list-header {
+          display: flex;
+          justify-content: space-between;
           align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .empty-state {
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px dashed rgba(255, 255, 255, 0.22);
+          border-radius: 18px;
+          padding: 22px;
+          color: #e2e8f0;
+          text-align: center;
+          line-height: 1.7;
         }
 
         .child-card {
@@ -1134,6 +1234,14 @@ const VaccineReminder = () => {
           .dashboard-header {
             flex-direction: column;
             align-items: flex-start;
+          }
+
+          .header-section {
+            grid-template-columns: 1fr;
+          }
+
+          .hero-features {
+            grid-template-columns: 1fr;
           }
 
           .progress-bar {
